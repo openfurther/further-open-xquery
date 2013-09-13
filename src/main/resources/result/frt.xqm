@@ -35,7 +35,7 @@ declare namespace dts = 'http://further.utah.edu/dts';
 declare namespace mdr = "http://further.utah.edu/mdr";
 declare namespace xs = "http://www.w3.org/2001/XMLSchema";
 declare namespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
-declare namespace fqe = 'http://further.utah.edu/fqe'; 
+declare namespace fqe = 'http://further.utah.edu/fqe';
 (: DO NOT USE DEFAULT NAMESPACE, it may conflict with the response Namespaces :)
 
 (: Global CONSTANTS, Always Translating FROM FURTHeR Namespace ID :)
@@ -77,6 +77,7 @@ declare variable $frt:ATTR_VALUE_TRANS_FUNC as xs:string := 'ATTR_VALUE_TRANS_FU
 declare variable $frt:ATTR_VALUE_TRANS_TO_DATA_TYPE as xs:string := 'ATTR_VALUE_TRANS_TO_DATA_TYPE';
 declare variable $frt:CODING_SYSTEM as xs:string := 'CODING_SYSTEM';
 declare variable $frt:EXT_PERSON as xs:string := 'EXT_PERSON';
+declare variable $frt:EXT_ROOT_ID_ATTR as xs:string := 'EXT_ROOT_ID_ATTR';
 
 declare variable $frt:pickMe as xs:string := 'pickMe';
 declare variable $frt:skipATTR as xs:string := 'skipAttr';
@@ -90,167 +91,148 @@ declare variable $frt:LocalCode as xs:string := 'Local Code';
 
 (:==================================================================:)
 (: Main Translate Result Function                                   :)
+(: Our Goal here is to construct the Target Central Model           :)
 (:==================================================================:)
 declare function frt:transResult($inputXML as document-node(),
-                                 $sourceNamespaceId as xs:string,
+                                 $extNmspcId as xs:string,
                                  $dataSetId as xs:string)
 {
 
   (: Get the Namespace Name Using the Namespace ID :)
-  let $srcNmspcName := further:getNamespaceName($sourceNamespaceId)
+  let $extNmspcName := further:getNamespaceName($extNmspcId)
   
   (: Must Keep this Order of Processing :)
 
-  (: Call Initialization :)
-  let $initialized := frt:initResultTranslation($inputXML)
+  (: Create Empty Person Template :)
+  let $emptyPerson := frt:createPersonTemplate($extNmspcName)
+
+  (: Initialize Empty Person Template with MDR Properties :)
+  let $mdrPerson := frt:initPersonTemplate($emptyPerson,$extNmspcName)
   
-  (: Process MDR :)
-  let $processedMDR := frt:processMDR($initialized,$sourceNamespaceId)
-  
-  (: Process DTS :)
-  let $processedDTS := frt:processDTS($processedMDR,$sourceNamespaceId)
-  
-  (: Process <personId> :)
-  let $processedPersonId := frt:transPersonIdTags($processedDTS,$dataSetId)
-  
-  (: Error Handling :)
-  let $validated := frt:validate($processedPersonId,$srcNmspcName)
-  
-  (: Call cleanup :)
-  let $cleaned := frt:cleanup($validated)
-  
-  (: Return Final Cleaned Version :)
-  return $cleaned
-  
+  return
+    
+    (: Validate Initialized Template :)
+    if ($mdrPerson/*[@extRootObject=$frt:ERROR]) then
+
+		  (: Error Handling :)
+		  frt:validateTemplate($mdrPerson,$extNmspcName)
+      
+    else (: Continue Processing :)
+    
+		  (: Read the Input File from External Result for Processing :)
+		  let $transResult := frt:process($mdrPerson,$inputXML,$extNmspcId,$dataSetId)
+
+		  (: Error Handling :)
+		  let $validated := frt:validate($transResult,$extNmspcName)
+      
+		  (: Call cleanup Transformation :)
+		  let $cleaned := frt:cleanup($validated)
+
+		  (: Return Final Cleaned Version :)
+		  return $cleaned
+
 };
 
 
 (:==================================================================:)
-(: Initialization = Convert XML Attributes into XML Elements        :)
+(: createPersonTemplate = Create Person Template XML Format         :)
 (:==================================================================:)
-declare function frt:initResultTranslation($inputXML as document-node())
+declare function frt:createPersonTemplate($extNmspcName as xs:string)
+as document-node()
 {
-(: BEGIN XQUERY TRANSFORMATION :)
-(: Make a copy of the entire Document :)
-copy $inputCopy1 := $inputXML
-modify (
 
-  (: Since our Output Expects everything as XML Elements, and NOT XML Attributes :)
-  (: We will convert all XML Attributes into XML Elements Here :)
-  (: For Any Element that has any XML Attribute :)
-  for $elem in $inputCopy1//*[@*]
-  return replace node $elem
-  with
-    (: Convert the XML Attribute into an XML Element :)
-    element {fn:name($elem)} {
-    for $child in $elem/(@*|text())
-    return element {
-      if ($child instance of attribute())
-      then fn:name($child)
-      else 'value'} {fn:string($child)}
-  }
-    
-) (: End Modify :)
-return 
-copy $inputCopy2 := $inputCopy1
-modify (
-
-  (: Insert mdrFlag for Elements :)
-  for $elem in $inputCopy2/ResultList//*
-    return 
-	  insert node attribute mdrFlag {$frt:NO} into $elem
-
-) (: End Modify :)
-return $inputCopy2
+(: Create a Document Type Here! :)
+document
+{
+  <Person centralRootObject="{$frt:EMPTY}" extRootObject="{$frt:EMPTY}">
+    <id></id>
+    <administrativeGenderNamespaceId>{$frt:SNOMED}</administrativeGenderNamespaceId>
+    <administrativeGender extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></administrativeGender>
+    <raceNamespaceId>{$frt:SNOMED}</raceNamespaceId>
+    <race extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></race>
+    <ethnicityNamespaceId>{$frt:SNOMED}</ethnicityNamespaceId>
+    <ethnicity extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></ethnicity>
+    <dateOfBirth extPath="{$frt:EMPTY}"></dateOfBirth>
+    <birthYear extPath="{$frt:EMPTY}"></birthYear>
+    <birthMonth extPath="{$frt:EMPTY}"></birthMonth>
+    <birthDay extPath="{$frt:EMPTY}"></birthDay>
+    <educationLevel extPath="{$frt:EMPTY}"></educationLevel>
+    <primaryLanguageNamespaceId>{$frt:SNOMED}</primaryLanguageNamespaceId>
+    <primaryLanguage extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></primaryLanguage>
+    <maritalStatusNamespaceId>{$frt:SNOMED}</maritalStatusNamespaceId>
+    <maritalStatus extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></maritalStatus>
+    <religionNamespaceId>{$frt:SNOMED}</religionNamespaceId>
+    <religion extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></religion>
+    <multipleBirthIndicator extPath="{$frt:EMPTY}"></multipleBirthIndicator>
+    <multipleBirthIndicatorOrderNumber extPath="{$frt:EMPTY}"></multipleBirthIndicatorOrderNumber>
+    <causeOfDeathNamespaceId>{$frt:SNOMED}</causeOfDeathNamespaceId>
+    <causeOfDeath extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></causeOfDeath>
+    <dateOfDeath extPath="{$frt:EMPTY}"></dateOfDeath>
+    <deathYear extPath="{$frt:EMPTY}"></deathYear>
+    <pedigreeQuality extPath="{$frt:EMPTY}"></pedigreeQuality>
+  </Person>
+}
 
 (: END Function :)
 };
 
 
 (:==================================================================:)
-(: Process MDR Stuff                                                :)
+(: initPersonTemplate = Create Person Template XML Format           :)
 (:==================================================================:)
-declare function frt:processMDR($inputXML as document-node(),
-                             $srcNmspcId as xs:string)
+declare function frt:initPersonTemplate($emptyPerson as document-node(),
+                                        $extNmspcName as xs:string)
+as document-node()
 {
-
+  
 (: BEGIN XQUERY TRANSFORMATION :)
 (: Make a copy of the entire Document :)
-copy $inputCopy := $inputXML
+copy $inputCopy := $emptyPerson
 modify (
-
-  (: Get the Namespace Name Using the Namespace ID :)
-  let $srcNmspcName := further:getNamespaceName($srcNmspcId)
   
-  (: For ALL XML Element Names AND XML Attributes AFTER the ROOT Node :)
-  (: Since we have converted all xml attributes into xml elements in the initResultTranslation function :)
-  (: We only need to deal with Elements here :)
-  (: for $field at $i in ($inputCopy/*//* , $inputCopy/*//@*) :)
-  for $field at $i in $inputCopy/*//*
+  (: Find the Central Root Object :)
+  (: The Name of the Root Element is the Name of the Central Root Object :)
+  let $centralRootObject := fn:name($inputCopy/child::node())
+  return (
+    
+    (: Set the Central Root Object XML Attribute :)
+    replace value of node $inputCopy//@centralRootObject with $centralRootObject
+
+    , (: DO MORE STUFF :)
+
+    (: Find the External Root Object to Use as a Reference Point for External XML Doc :)
+    let $extRootObject := frt:getExtRootObject($centralRootObject,$extNmspcName)
+    return
+      replace value of node $inputCopy//@extRootObject with $extRootObject
+
+    , (: DO MORE STUFF :)
+    
+    (: Populate the extPath XML Attributes in the Template from MDR :)
+    for $centralAttr in $inputCopy//*[@extPath=$frt:EMPTY]
+      let $extPath := frt:getExtPath(name($centralAttr),$frt:FURTHeR,$extNmspcName)
+      return replace value of node $centralAttr/@extPath with $extPath
+      
+    , (: DO MORE STUFF :)
+    
+    (: Set DTS Translation Instruction from MDR :)
+    for $dtsAttr in $inputCopy//*[@dtsFlag]
+      let $dtsFlag := frt:getDTSFlag(name($dtsAttr),$frt:FURTHeR,$extNmspcName)
+      return replace value of node $dtsAttr/@dtsFlag with $dtsFlag
+   
+  ) (: End Return :)
   
-    let $fieldName := $field/name()
-    let $fieldData := fn:data($field)
-
-    (: Call MDR :)
-    (: DEBUG :)
-    (: let $mdrResult := concat('MDR-',$i) :)
-    (: let $mdrResult := frt:getMDRAttrURL($fieldName) :)
-    let $mdrResult := frt:getMDRResult($fieldName,$srcNmspcName,$frt:FURTHeR)
-
-    return (
-      
-      (: DEBUG :)
-      (: insert node attribute mdrURL {$mdrResult} into $field :)
-      (: if there is a MDR Result :)
-      if ($mdrResult/leftAsset) then (
-        
-        (: Rename the XML Element as the Translated Name :)
-        rename node $field as $mdrResult/leftAsset/text(),
-        
-        (: Insert XML Attributes for Person and Person ID for later Processing :)
-        if ($mdrResult/properties/entry/key = $frt:EXT_PERSON) then (
-          insert node attribute rootPerson 
-            {fn:substring-before($mdrResult/properties/entry/value/text(),$frt:DELIMITER)}
-            into $field,
-          insert node attribute personId
-            {fn:substring-after($mdrResult/properties/entry/value/text(),$frt:DELIMITER)}
-            into $field
-        )else()
-        
-        , (: Set mdrFlag :)
-        
-        if ($mdrResult/properties/entry[key=$frt:ATTR_TRANS_FUNC and value=$frt:skipATTR]) then
-          replace value of node $field/@mdrFlag with $frt:SKIP
-        else
-          replace value of node $field/@mdrFlag with $frt:YES
-        
-      )else() (: End if there is a Result :)
-
-      , (: Do More Stuff :)
-
-      (: For each node that does NOT have any Children AND Need DTS Translation :)
-      if ($mdrResult/properties/entry/key/text() = $frt:ATTR_VALUE_TRANS_FUNC 
-          and $mdrResult/properties/entry/value/text() = $frt:translateCode
-          and $field[not($field//*)] ) then
-          
-        (: Initialize Field for DTS Translation Later :)
-        insert node attribute dtsFlag {$frt:NO} into $field
-
-      else ( (: End If Else Do Nothing :) )
-      
-    ) (: End Return :)
-
 ) (: End Modify :)
 return $inputCopy
-  
+
+(: END Function :)
 };
 
 
 (:==================================================================:)
-(: Process DTS Stuff                                                :)
+(: validateTemplate (Error Handling)                                :)
 (:==================================================================:)
-declare function frt:processDTS($inputXML as document-node(),
-                                $srcNmspcId as xs:string)
+declare function frt:validateTemplate($inputXML,$srcNmspcName as xs:string)
+as document-node()
 {
 
 (: BEGIN XQUERY TRANSFORMATION :)
@@ -258,53 +240,158 @@ declare function frt:processDTS($inputXML as document-node(),
 copy $inputCopy := $inputXML
 modify (
 
-  (: Get all Fields that need DTS Translation :)
-  for $field at $i in $inputCopy//*[@dtsFlag=$frt:NO]
+  if ($inputCopy/*[@extRootObject=$frt:ERROR]) then 
+
+    (: Get Name of the XML Root Node (Central Root Object) :)
+    let $attrName := fn:name($inputCopy/*[@extRootObject=$frt:ERROR])
+    return
+    (: replace ONLY Works when we are Referring to a Document Type (NOT Element Type) :)
+    replace node $inputCopy/*
+       with 
+       <error xmlns="http://further.utah.edu/core/ws">
+         <code>MDR_RESULT_TRANSLATION_ERROR</code>
+         <message>MDR Association for [ {$srcNmspcName}.{$attrName} ] May be Missing</message>
+       </error>
   
-    let $fieldName := $field/name()
-    let $fieldData := fn:data($field)
-
-    (: Call MDR to find out what Coding Standard to Translate to :)  
-    let $term := frt:getTerminology($fieldName,$frt:FURTHeR)
-
-    (: let $tgCodeSys := '30' :)        
-    let $tgCodeSys := substring-after($term/rightAsset/text(),$frt:DELIMITER)
-        
-    (: Call DTS :)
-    let $dtsResponse := further:getTranslatedConcept($srcNmspcId,
-                                                     $frt:LocalCode,
-                                                     $fieldData,
-                                                     $tgCodeSys,
-                                                     $frt:CodeInSource)
-    (: DEBUG DTS URL :)
-    (: let $dtsURL := further:getConceptTranslationRestUrl($srcNmspcId,
-                                                     $frt:LocalCode,
-                                                     $fieldData,
-                                                     $tgCodeSys,
-                                                     $frt:CodeInSource) :)
-
-    (: DEBUG :)
-    (: let $translatedPropVal := concat('DTS-',$i) :)
-    let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-
-    (: Replace Value of Node with Translated DTS Value :)
-    return (
-      replace value of node $field with $translatedPropVal,
-      if ($translatedPropVal) then 
-        replace value of node $field/@dtsFlag with $frt:YES
-      else()
-    )
+  else ()
   
 ) (: End Modify :)
 return $inputCopy
+
+(: END Function :)
+};
+
+
+(:==================================================================:)
+(: process = Processing Function                                    :)
+(:==================================================================:)
+declare function frt:process($mdrPerson,$extXML,$extNmspcId,$dataSetId)
+{
   
+  (: High Level WorkFlow
+	  1) Find the rootObject in the External Model by using the extRootObject Attribute Hint
+	  2) For each rootObject in the External Model, create a mdrPerson Node and populate it with DTS Translated Data
+	  3) Replace the <id> node with getPersonId function
+	  4) Place the full result in a <ResultList> node
+  :)
+  
+  (: Get External Root Object :)
+  let $extRootObject := fn:substring-before($mdrPerson//@extRootObject,$frt:DELIMITER)
+  
+  (: Loop to Return ALL External Root Objects :)
+  return 
+  <ResultList>
+    {
+      for $extRoot at $i in $extXML/ResultList/*[fn:name()=$extRootObject]
+      (: debug
+         return $extRootObject :)
+      return frt:transPerson($mdrPerson,$extRoot,$extNmspcId,$dataSetId)
+    }
+  </ResultList>
+
+(: END Function :)
+};
+
+
+(:==================================================================:)
+(: transPerson = Translate Single Person                            :)
+(:==================================================================:)
+declare function frt:transPerson($mdrPerson,$extPerson,$extNmspcId,$dataSetId)
+as document-node()
+{
+
+(: 
+1) Get Data from External Input File and Populate our Template
+2) Get DTS Translated Data if necessary
+3) Replace the <id> node with getPersonId function
+:)
+  
+(: BEGIN XQUERY TRANSFORMATION :)
+copy $transFields := $mdrPerson
+modify (
+
+  (: Get Data from External Person :)  
+  for $field in $transFields//*[@extPath != $frt:EMPTY]
+    (: Get the External Field Value using Dynamic Evaluation Function :)
+    (: Full Path should be starting from under the rootObject node :)
+    (: Create a String to represent the Full Document Path :)
+    let $s := concat("$doc",$field/@extPath)
+    (: Evaluate the String with a mapping to the document/element :)
+    (: Took long time to figure this out, it is amazing when it works! :)
+    let $extValue := xquery:eval($s,map {"doc" := $extPerson})
+    let $cnt := fn:count($extValue)
+    return (
+	    if ( $cnt > 1 ) then
+		    insert node attribute multiError {$cnt} into $field
+	      else
+        replace value of node $field with $extValue
+    )
+
+) (: End Modify :)
+return 
+
+(: BEGIN XQUERY TRANSFORMATION :)
+copy $transDTS := $transFields
+modify (
+
+  (: Get Data from External Person :)  
+  for $field in $transDTS//*[@dtsFlag=$frt:translateCode]
+
+    let $dtsSrcPropVal := $field/text()
+    let $tgTerm := $field/@dtsTerm
+    
+    (: Call DTS :)
+    let $dtsResponse := further:getTranslatedConcept($extNmspcId,
+                                                     $frt:LocalCode,
+                                                     $dtsSrcPropVal,
+                                                     $tgTerm,
+                                                     $frt:CodeInSource)
+    (: DEBUG DTS URL :)
+    (: let $dtsURL := further:getConceptTranslationRestUrl($extNmspcId,
+                                                        $frt:LocalCode,
+                                                        $dtsSrcPropVal,
+                                                        $tgTerm,
+                                                        $frt:CodeInSource) :)
+
+    (: Get Translated Value :)
+    let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
+     
+    return
+      if ($translatedPropVal) then (
+        replace value of node $field with $translatedPropVal
+        ,
+        replace value of node $field/@dtsFlag with $frt:YES
+      )
+      else 
+        (: Always return Error if there is no DTS Mapping :)
+        replace value of node $field/@dtsFlag with $frt:ERROR
+
+) (: End Modify :)
+return 
+
+(: BEGIN XQUERY TRANSFORMATION :)
+copy $transRootId := $transDTS
+modify (
+
+  (: Find the External Root Object & Root Object Attr :)
+  let $extRootObject := fn:substring-before($transRootId//@extRootObject,$frt:DELIMITER)
+  let $extRootObjectAttr := fn:substring-after($transRootId//@extRootObject,$frt:DELIMITER)
+  return 
+    replace node $transRootId//id 
+       with frt:getPersonId($extNmspcId,$extPerson,$extRootObject,$extRootObjectAttr,$dataSetId)
+
+) (: End Modify :)
+return $transRootId
+
+
+(: END Function :)
 };
 
 
 (:==================================================================:)
 (: Validate (Error Handling)                                        :)
 (:==================================================================:)
-declare function frt:validate($inputXML as document-node(),$srcNmspcName as xs:string)
+declare function frt:validate($inputXML,$srcNmspcName as xs:string)
 {
 (: BEGIN XQUERY TRANSFORMATION :)
 (: Make a copy of the entire Document :)
@@ -318,44 +405,23 @@ modify (
      Therefore, the position predicate[1] will function properly.
      if we take out the parentheses and the [1], we will list the all criterias with error.
      which we may want in the future. :)
-
   
-  (: Check for Non-Translated Fields :)
-  if ($inputCopy//*[@mdrFlag=$frt:NO]) then (
+  if ($inputCopy//*[@dtsFlag=$frt:ERROR]) then (
 
-    (: Wish i could just replace, but did not work :)
-    (: So I'm just deleting the whole file and then inserting the Error :)
-    delete node $inputCopy/ResultList,
-    (: Return the First Criteria that Errored so we do not have a long list of Errors :)
-    for $field in ($inputCopy//*[@mdrFlag=$frt:NO])[1]
-      let $attrName := fn:name($field)
-      return
-      insert node
-        <error xmlns="http://further.utah.edu/core/ws">
-          <code>MDR_RESULT_TRANSLATION_ERROR</code>
-          <message>MDR Association for [ {$srcNmspcName}.{$attrName} ] May be Missing</message>
-        </error>
-        into $inputCopy 
-  )
-  else if ($inputCopy//*[@dtsFlag=$frt:NO]) then (
-    
-    (: Wish i could just replace, but did not work :)
-    (: So I'm just deleting the whole file and then inserting the Error :)
-    delete node $inputCopy/ResultList,
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
     for $field in ($inputCopy//*[@dtsFlag=$frt:NO])[1]
-      let $attrName := fn:name($field)
+    let $attrName := fn:name($field)
       return
-      insert node
-        <error xmlns="http://further.utah.edu/core/ws">
-          <code>DTS_RESULT_TRANSLATION_ERROR</code>
-          <message>DTS Mapping for [ {$srcNmspcName}.{$attrName} ] May be Missing</message>
-        </error>
-        into $inputCopy 
+      replace node $inputCopy/*
+         with
+         <error xmlns="http://further.utah.edu/core/ws">
+           <code>DTS_RESULT_TRANSLATION_ERROR</code>
+           <message>DTS Mapping for [ {$srcNmspcName}.{$attrName} ] May be Missing</message>
+         </error>
   )
   else(
     (: Remove ALL Nodes that have been Marked to be SKIPPED :)
-    delete node $inputCopy//*[@mdrFlag=$frt:SKIP]
+    delete node $inputCopy//*[@extPath=$frt:SKIP]
   ) (: End IF-Else Statement :)
   
 ) (: End Modify :)
@@ -368,119 +434,51 @@ return $inputCopy
 (:==================================================================:)
 (: Cleanup                                                          :)
 (:==================================================================:)
-declare function frt:cleanup($inputXML as document-node())
+declare function frt:cleanup($inputXML)
 {
+
 (: BEGIN XQUERY TRANSFORMATION :)
-(: Make a copy of the entire Document :)
-copy $inputCopy := $inputXML
+copy $inputCopy1 := $inputXML
 modify (
   
-  (: Delete ALL tranFlag Attributes on SUCCESS :)
-  delete node $inputCopy//@rootPerson,
-  delete node $inputCopy//@personId,
-  delete node $inputCopy//@mdrFlag,
-  delete node $inputCopy//@dtsFlag
-
+  (: Remove ALL Empty Data Nodes :)
+  for $node in $inputCopy1//*[@extPath=$frt:EMPTY]
+    return delete node $node
+        
+  , (: Delete ALL tranFlag Attributes on SUCCESS :)
+  delete node $inputCopy1//@extRootObject,
+  delete node $inputCopy1//@centralRootObject,
+  delete node $inputCopy1//@extPath,
+  delete node $inputCopy1//@dtsTerm,
+  delete node $inputCopy1//@dtsFlag
+  
 ) (: End Modify :)
-return $inputCopy
+return
+
+(: BEGIN XQUERY TRANSFORMATION :)
+copy $inputCopy2 := $inputCopy1
+modify (
+  
+  (: Remove ALL Empty Namespace Nodes :)
+	(: Loop through Each Person rootObject :)
+	for $person in $inputCopy2/Person
+	
+	  (: For ALL Namespace Nodes :)
+	  for $nmspcNode in $person//*[fn:contains(fn:name(),'NamespaceId')]
+	    
+	    (: Get the coresponding data node name :)
+	    let $dataNodeName := fn:substring-before(fn:name($nmspcNode),'NamespaceId')
+	    
+	    return (:insert node attribute debug {$dataNodeName} into $nmspcNode:)
+	      (: Remove ALL Namespace Nodes if coresponding dataNode does NOT exist :)
+        if (fn:not(fn:exists($person//*[fn:name()=$dataNodeName]))) then
+	        delete node $nmspcNode
+	      else()
+  
+) (: End Modify :)
+return $inputCopy2
 
 (: END Function :)
-};
-
-
-(:==================================================================:)
-(: getMDRResult = ALWAYS GET ONE MDR Attribute Translation RESULT   :)
-(:==================================================================:)
-declare function frt:getMDRResult(
-                 $srcAttrName as xs:string,
-                 $srcNmspcName as xs:string,
-                 $tgNmspcName as xs:string)
-{ 
-  (: EXAMPLE: ${server.dts.ws}/mdr/rest/asset/association/right/translatesTo/genderConceptId :)
-  (:          ${server.dts.ws}/mdr/rest/asset/association/right/translatesTo/{sourceAttr} :)
-  (:          http://demo.further.utah.edu:9000/mdr/rest/asset/association/right/translatesTo/genderConceptId :)
-  let $baseURL := fn:concat($const:fmdrRestServer,'/rest/asset/association/right/translatesTo/')
-  let $docUrl := fn:concat( $baseURL, $srcAttrName )
-  
-  (: Prevent XQuery Injection Attacks :)
-  let $parsedDocUrl := iri-to-uri( $docUrl )
-  let $doc := doc($parsedDocUrl)
-  
-  (: Return the AssetAssociation for the Correct Namespaces :)
-  return 
-    
-    if (fn:count($doc//assetAssociation[rightNamespace=$srcNmspcName and leftNamespace=$tgNmspcName]) > 1) then
-      $doc//assetAssociation[rightNamespace=$srcNmspcName and leftNamespace=$tgNmspcName and properties/entry/value=$frt:pickMe]
-    else 
-      $doc//assetAssociation[rightNamespace=$srcNmspcName and leftNamespace=$tgNmspcName]
-
-};
-
-(:==================================================================:)
-(: getMDRAttrURL = Get URL for Debugging                            :)
-(:==================================================================:)
-declare function frt:getMDRAttrURL($srcAttrName as xs:string)
-{ 
-  (: EXAMPLE: ${server.dts.ws}/mdr/rest/asset/association/right/translatesTo/genderConceptId :)
-  (:          ${server.dts.ws}/mdr/rest/asset/association/right/translatesTo/{sourceAttr} :)
-  (:          http://demo.further.utah.edu:9000/mdr/rest/asset/association/right/translatesTo/genderConceptId :)
-  let $baseURL := fn:concat($const:fmdrRestServer,'/rest/asset/association/right/translatesTo/')
-  let $docUrl := fn:concat( $baseURL, $srcAttrName )
-
-  (: Prevent XQuery Injection Attacks :)
-  let $parsedDocUrl := iri-to-uri( $docUrl )
-  return $parsedDocUrl
-};
-
-
-(:==================================================================:)
-(: getMDRResult = ALWAYS GET ONE MDR Attribute Translation RESULT   :)
-(:==================================================================:)
-declare function frt:getTerminology(
-                 $fieldName as xs:string,
-                 $NmspcName as xs:string)
-{ 
-  (: EXAMPLE: ${server.dts.ws}/mdr/rest/asset/association/left/useTerminology/race :)
-  (:          ${server.dts.ws}/mdr/rest/asset/association/left/useTerminology/{fieldName} :)
-  (:          http://demo.further.utah.edu:9000/mdr/rest/asset/association/left/useTerminology/race :)
-  let $baseURL := fn:concat($const:fmdrRestServer,'/rest/asset/association/left/useTerminology/')
-  let $docUrl := fn:concat( $baseURL, $fieldName )
-  
-  (: Prevent XQuery Injection Attacks :)
-  let $parsedDocUrl := iri-to-uri( $docUrl )
-  let $doc := doc($parsedDocUrl)
-  
-  (: Return the AssetAssociation for the Correct Namespaces :)
-  return 
-    
-    if (fn:count($doc//assetAssociation[leftAsset=$fieldName and leftNamespace=$NmspcName and association='useTerminology']) > 1) then
-      <error>More Than One Terminology Found </error>
-    else 
-      $doc//assetAssociation[leftAsset=$fieldName and leftNamespace=$NmspcName and association='useTerminology']
-
-};
-
-
-(:==================================================================:)
-(: printDebug = Print Debug Variable to Query Info Screen           :)
-(:==================================================================:)
-declare function frt:printDebug($debugVar,$msg as xs:string?)
-{
-  let $var := $debugVar
-  return fn:trace( $var,concat('DEBUG ', $msg, '=') )
-};
-
-
-(:==================================================================:)
-(: ageToBirthYear = Translate Age to BirthYear                      :)
-(:==================================================================:)
-declare function frt:ageToBirthYear($age)
-{
-  (: Get Current Year :)
-  let $curYear := year-from-date(current-date())
-  
-  (: Subtract Age from CurrentYear to Get BirthYear :)
-  return $curYear - $age
 };
 
 
@@ -521,78 +519,190 @@ return $inputCopy2
 }; (: END OF FUNCTION frt:sanitize :)
 
 
-
 (:=====================================================================:)
-(: transPersonIdTags                                                   :)
-(: Translate Person ID Tags                               :)
+(: getPersonId = Construct the group of Person ID Tags                 :)
 (:=====================================================================:)
-declare function frt:transPersonIdTags($inputXML,$datasetId) 
+declare function frt:getPersonId($extNmspcId,$extPerson,$extRootObject,$extRootObjectAttr,$dataSetId) 
 {
+  (: Get the External ID Value :)
+  let $s := concat("$doc/",$extRootObjectAttr)
+      
+  (: Evaluate the String with a mapping to the document/element :)
+  (: Took long time to figure this out, it is amazing when it works! :)
+  let $extIdValue := xquery:eval($s,map {"doc" := $extPerson})
 
-copy $inputCopy := $inputXML
-modify (
-  
-  (: if the MDR translated name is <personId>
-     then replace it with all these tags :)   
-  for $person in $inputCopy/ResultList/Person[id.id]
-  
-	  (: Get the Source Person Object and Person ID Attribute from MDR :)
-	  let $extPersonName := $person/@rootPerson
-	  (: let $srcObject := 'Person' :)
-	  let $extPersonIdName := $person/@personId
-	  (: let $srcPersonIdAttr := 'personId' :)
-  
-	  return replace node $person/id.id 
-	    with frt:getPersonIdTags($extPersonName,$extPersonIdName,$person/id.id/text(),$datasetId)
+  let $cnt := fn:count($extIdValue)
+  return (
+	  if ( $cnt > 1 ) then 
+      <id multiError='{$cnt}'/>
+	  else 
+		  (: Call Identity Resolution Service :)
+		  (: 
+		    REST CAll FORMAT
+		    
+		    http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/
+		    {target_object}/{target_attribute}/{source_namespace_id}/
+		    {source_object}/{source_attribute}/{source_id_value}/{queryId}
+		    
+		    Note: 
+		    For Result Translation, Target is always the Central Model (FURTHER Model)
+		    The Source is the External Data Source Models
+		    
+		    Examples:
+http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/PERSON/FPERSON_ID/32868/PERSON/PERSONID/12345/862c9130-0e89-11e3-bb9f-f23c91aec05e
+http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/PERSON/FPERSON_ID/32776/PATIENT/PAT_DE_ID/12345/862c9130-0e89-11e3-bb9f-f23c91aec05e
+		  :)
+      
+      (: Built the REST URL :)     
+		  let $baseURL := fn:concat($const:fqeRestServer,'/mpi/rest/id/generate/PERSON/FPERSON_ID/')
+		  let $docUrl := fn:concat($baseURL, $extNmspcId, '/', $extRootObject, '/' , $extRootObjectAttr , '/', $extIdValue , '/', $dataSetId)
+		  
+		  (: Prevent XQuery Injection Attacks :)
+		  let $parsedDocUrl := iri-to-uri($docUrl)
+		  let $result := doc($parsedDocUrl)
+		  
+		  (: Strip out the Person ID from the Result :)
+		  (: let $resolvedPersonId := $result//fqe:value/text() :)
+		  let $resolvedPersonId := $result/fqe:id/fqe:value/text()
 
-) (: End Modify :)
-return $inputCopy
+		  return (
+        
+        (: DEBUG with trace :)
+        (: trace($resolvedPersonId, 'ResolvedPersonID'), :)
 
-}; (: END OF FUNCTION frt:transPersonIdTags :)
-
-
-(:=====================================================================:)
-(: getPersonIdTags                                                     :)
-(: Construct the group of Person ID Tags                               :)
-(:=====================================================================:)
-declare function frt:getPersonIdTags($srcObject,$srcAttr,$srcPersonId,$datasetId) 
-{
-  (: Call Identity Resolution Service :)
-  (: 
-    REST CAll FORMAT
+				<id>
+				  <datasetId>{$dataSetId}</datasetId>
+		      <id>{$resolvedPersonId}</id>
+			  </id>
+			  ,
+			  <compositeId>{$dataSetId}:{$resolvedPersonId}</compositeId>  
+		  )
+      
+  ) (: End of Return :)
     
-    http://demo.further.utah.edu:9000/fqe/rest/fqe/id/generate/
-    {target_object}/{target_attribute}/{target_namespace}/
-    {source_object}/{source_attribute}/{source_identifier}
-    
-    Note: 
-    For Result Translation, Target is always the Central Model (FURTHER Model)
-    The Source is the External Data Source Models
-    
-    Examples:
-    http://demo.further.utah.edu:9000/fqe/rest/fqe/id/generate/PERSON/PERSON_ID/32776/PATIENT/PAT_DE_ID/12345
-    http://demo.further.utah.edu:9000/fqe/rest/fqe/id/generate/PERSON/PERSON_ID/32776/PERSON/PERSON_ID/12345
-  :)
-  let $baseURL := fn:concat($const:fqeRestServer,'/rest/fqe/id/generate/PERSON/PERSON_ID/32776/')
-  let $docUrl := fn:concat( $baseURL, $srcObject, '/' , $srcAttr , '/', $srcPersonId )
+}; (: END OF FUNCTION :)
+
+
+(:==================================================================:)
+(: getLeftAssoc = Get Left Assocation from MDR                      :)
+(:==================================================================:)
+declare function frt:getLeftAssoc(
+                 $leftAttrName as xs:string,
+                 $leftNmspcName as xs:string,
+                 $rightNmspcName as xs:string)
+{ 
+  (: EXAMPLE: ${server.dts.ws}/mdr/rest/asset/association/left/translatesTo/genderConceptId :)
+  (:          ${server.dts.ws}/mdr/rest/asset/association/left/translatesTo/{sourceAttr} :)
+  (:          http://demo.further.utah.edu:9000/mdr/rest/asset/association/left/translatesTo/administrativeGender :)
+  let $baseURL := fn:concat($const:fmdrRestServer,'/rest/asset/association/left/translatesTo/')
+  let $docUrl := fn:concat( $baseURL, $leftAttrName )
   
   (: Prevent XQuery Injection Attacks :)
   let $parsedDocUrl := iri-to-uri( $docUrl )
-  let $result := doc($parsedDocUrl)
+  let $doc := doc($parsedDocUrl)
   
-  (: Strip out the Person ID from the Result :)
-  let $resolvedPersonId := $result//fqe:value/text()
+  (: Return the AssetAssociation for the Correct Namespaces :)
+  return 
+    
+    if (fn:count($doc//assetAssociation[rightNamespace=$rightNmspcName and leftNamespace=$leftNmspcName]) > 1) then
+      $doc//assetAssociation[rightNamespace=$rightNmspcName and leftNamespace=$leftNmspcName and properties/entry/value=$frt:pickMe]
+    else 
+      $doc//assetAssociation[rightNamespace=$rightNmspcName and leftNamespace=$leftNmspcName]
+
+};
+
+
+(:==================================================================:)
+(: getExtPath = GET XPath of XML Element in External XML from MDR   :)
+(:==================================================================:)
+declare function frt:getExtPath(
+                 $leftAttrName as xs:string,
+                 $leftNmspcName as xs:string,
+                 $rightNmspcName as xs:string)
+{ 
+  let $leftAssoc := frt:getLeftAssoc($leftAttrName,$leftNmspcName,$rightNmspcName)
+
+  (: Extract Out the External XPath Value :)
+  for $entry in $leftAssoc/properties/entry[key='RESULT_PATH']
+  return 
+    if ($entry) then $entry/value
+    else $frt:EMPTY
+
+};
+
+
+(:==================================================================:)
+(: getDTSFlag = GET DTS Instruction for External XML from MDR       :)
+(:==================================================================:)
+declare function frt:getDTSFlag(
+                 $leftAttrName as xs:string,
+                 $leftNmspcName as xs:string,
+                 $rightNmspcName as xs:string)
+{ 
+  let $leftAssoc := frt:getLeftAssoc($leftAttrName,$leftNmspcName,$rightNmspcName)
+
+  (: Extract Out the External XPath Value :)
+  for $entry in $leftAssoc/properties/entry[key=$frt:ATTR_VALUE_TRANS_FUNC]
+  return 
+    if ($entry) then $entry/value
+    else $frt:EMPTY
+
+};
+
+
+(:==================================================================:)
+(: getExtRootObject = GET External rootObject from MDR              :)
+(:==================================================================:)
+declare function frt:getExtRootObject(
+                 $centralRootObject as xs:string,
+                 $extNmspcName as xs:string
+                 )
+{
+
+  let $leftAssoc := frt:getLeftAssoc($centralRootObject,$frt:FURTHeR,$extNmspcName)
   
-  return(
-		<personId>
-		  <id>{$resolvedPersonId}</id>
-		  <datasetId>{$datasetId}</datasetId>
-	  </personId>
-	  ,
-	  <personCompositeId>{$datasetId}:{$resolvedPersonId}</personCompositeId>  
-  )
+  return
   
-}; (: END OF FUNCTION frt:getPersonIdTags :)
+    (: if there is an Association Result :)
+    if ($leftAssoc/properties/entry[key=$frt:EXT_ROOT_ID_ATTR]) then
+  
+      (: Get the External Root Object:)  
+      let $extRootObject := $leftAssoc/rightAsset/text()
+  
+      (: Get the External Root Object ID Attribute :)
+      let $extRootObjectAttr :=
+        for $entry in $leftAssoc/properties/entry[key=$frt:EXT_ROOT_ID_ATTR]
+          return $entry/value/text()
+  
+      (: Return Concatenated String :)
+      return concat($extRootObject,$frt:DELIMITER,$extRootObjectAttr)
+    
+    else $frt:ERROR
+
+};
+
+
+(:==================================================================:)
+(: printDebug = Print Debug Variable to Query Info Screen           :)
+(:==================================================================:)
+declare function frt:printDebug($debugVar,$msg as xs:string?)
+{
+  let $var := $debugVar
+  return fn:trace( $var,concat('DEBUG ', $msg, '=') )
+};
+
+
+(:==================================================================:)
+(: ageToBirthYear = Translate Age to BirthYear                      :)
+(:==================================================================:)
+declare function frt:ageToBirthYear($age)
+{
+  (: Get Current Year :)
+  let $curYear := year-from-date(current-date())
+  
+  (: Subtract Age from CurrentYear to Get BirthYear :)
+  return $curYear - $age
+};
 
 
 (: END OF MODULE :)

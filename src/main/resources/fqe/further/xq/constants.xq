@@ -36,6 +36,9 @@ declare variable $const:fmdrRestServer   := '${server.mdr.ws}';
 (: MDR resource-retrieval-by-path web service :)
 declare variable $const:fmdrRestService  := '${path.mdr.ws.resource.path}';
 
+(: FQE web services server URL :)
+declare variable $const:fqeRestServer := '${server.fqe.ws}';
+
 (: ================================================= :)
 (: MDR resource paths                                :)
 (: ================================================= :)

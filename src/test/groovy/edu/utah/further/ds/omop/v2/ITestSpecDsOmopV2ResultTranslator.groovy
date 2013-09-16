@@ -15,7 +15,8 @@
  */
 package edu.utah.further.ds.omop.v2
 
-import org.apache.cxf.BusFactory;
+import org.apache.cxf.BusFactory
+import org.custommonkey.xmlunit.DetailedDiff
 import org.custommonkey.xmlunit.Diff
 import org.custommonkey.xmlunit.XMLUnit
 import org.springframework.beans.factory.annotation.Autowired
@@ -25,13 +26,12 @@ import org.springframework.test.context.ContextConfiguration
 
 import spock.lang.Specification
 import spock.lang.Unroll
+import edu.utah.further.core.test.xml.IgnoreNamedElementsDifferenceListener
 import edu.utah.further.core.xml.xquery.XQueryService
 import groovy.util.logging.Slf4j
 
-
 /**
- * Query translation tests against ds-test/src/main/resources/query-translator 
- * XML files (Logical FURTHeR Query) to expected OMOPv2 Query output.
+ * ...
  * <p>
  * -----------------------------------------------------------------------------------<br>
  * (c) 2008-2012 FURTHeR Project, Health Sciences IT, University of Utah<br>
@@ -42,22 +42,22 @@ import groovy.util.logging.Slf4j
  * -----------------------------------------------------------------------------------
  *
  * @author N. Dustin Schultz {@code <dustin.schultz@utah.edu>}
- * @version Jul 3, 2013
+ * @version Sep 16, 2013
  */
 @ContextConfiguration(locations = [
 	"/META-INF/ds/test/ds-test-mdr-ws-client-context.xml",
 	"/META-INF/ds/test/ds-test-mdr-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-dts-ws-server-context.xml",
+	"/META-INF/ds/test/ds-test-fqe-mpi-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-xquery-context.xml",
 	"/open-xquery-test-context.xml",
 ])
 @Slf4j
-class ITestSpecDsOmopV2QueryTranslator extends Specification {
-
+class ITestSpecDsOmopV2ResultTranslator extends Specification {
 	@Autowired
 	XQueryService xQueryService
 
-	@Value('${server.mdr.ws}${path.mdr.ws.resource.path}/query/fqtCall.xq')
+	@Value('${server.mdr.ws}${path.mdr.ws.resource.path}/result/frtCall.xq')
 	def url;
 
 	def setup() {
@@ -66,24 +66,32 @@ class ITestSpecDsOmopV2QueryTranslator extends Specification {
 	}
 
 	@Unroll
-	def "Testing OMOPv2 Query Translations: #name"() {
+	def "Testing OMOPv2 Result Translations: #name"() {
 		given:
 		def xQuery = url.toURL().text
-		
 
-		def parameters = ["tgNmspcId" : "32868", "tgNmspcName" : "OMOP-V2"]
-		def result = xQueryService.executeIntoString(
-				new ByteArrayInputStream(xQuery.bytes), query, parameters)
-		query.close()
-		
+		def parameters = ["srcNmspcId" : "32868", "dataSetId" : "1234"]
+		def output = xQueryService.executeIntoString(
+				new ByteArrayInputStream(xQuery.bytes), result, parameters)
+
+		//no if debug is enabled jazz cuz groovy is cool like that (it does it for you)!
+		log.debug("++++++++++++++++++++++++++++++++++++++++")
+		log.debug(output)
+		log.debug("++++++++++++++++++++++++++++++++++++++++")
+
 		expect:
-		new Diff(result, expected.text).similar()
+		def diff = new DetailedDiff(new Diff(output, expected.text))
+		diff.overrideDifferenceListener(new IgnoreNamedElementsDifferenceListener(["id", "compositeId"]))
+		diff.similar()
+
+		result.close()
+		expected.close()
 
 
 		where:
-		query << queryFiles('/query-translator/input/*').values()
-		expected << queryFiles('/query-translator/omopv2/expected/*').values()
-		name << queryFiles('/query-translator/omopv2/expected/*').keySet()
+		result << queryFiles('/result-translator/omopv2/input/*').values()
+		expected << queryFiles('/result-translator/omopv2/expected/*').values();
+		name << queryFiles('/result-translator/omopv2/input/*').keySet()
 	}
 	
 	def cleanupSpec() {
@@ -99,5 +107,4 @@ class ITestSpecDsOmopV2QueryTranslator extends Specification {
 		new PathMatchingResourcePatternResolver().getResources(location)
 				.collectEntries(new TreeMap()){[it.filename, it.inputStream]}
 	}
-	
 }

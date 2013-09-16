@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ResultList>
+	<Person>
+		<id>
+			<datasetId>1234</datasetId>
+			<id>0</id>
+		</id>
+		<compositeId>1234:0</compositeId>
+		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
+		<administrativeGender>248152002</administrativeGender>
+		<raceNamespaceId>30</raceNamespaceId>
+		<race>413773004</race>
+		<birthYear>1960</birthYear>
+	</Person>
+	<Person>
+		<id>
+			<datasetId>1234</datasetId>
+			<id>2</id>
+		</id>
+		<compositeId>1234:2</compositeId>
+		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
+		<administrativeGender>248153007</administrativeGender>
+		<raceNamespaceId>30</raceNamespaceId>
+		<race>413773004</race>
+		<birthYear>1961</birthYear>
+	</Person>
+	<Person>
+		<id>
+			<datasetId>1234</datasetId>
+			<id>3</id>
+		</id>
+		<compositeId>1234:3</compositeId>
+		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
+		<administrativeGender>248152002</administrativeGender>
+		<raceNamespaceId>30</raceNamespaceId>
+		<race>413655005</race>
+		<birthYear>1993</birthYear>
+	</Person>
+</ResultList>

@@ -39,6 +39,12 @@
 			<version>${xmlunit.version}</version>
 		</dependency>
 		
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<version>${hsqldb.version}</version>
+		</dependency>
+		
 	</dependencies>
 	
 	<build>

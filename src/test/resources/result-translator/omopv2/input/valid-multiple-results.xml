@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ResultList>
+	<Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<personId>1716</personId>
+		<genderConceptId>442986</genderConceptId>
+		<raceConceptId>4185154</raceConceptId>
+		<yearOfBirth>1960</yearOfBirth>
+	</Person>
+	<Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<personId>1717</personId>
+		<genderConceptId>442985</genderConceptId>
+		<raceConceptId>4185154</raceConceptId>
+		<yearOfBirth>1961</yearOfBirth>
+	</Person>
+	<Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<personId>1718</personId>
+		<genderConceptId>442986</genderConceptId>
+		<raceConceptId>4211480</raceConceptId>
+		<yearOfBirth>1993</yearOfBirth>
+	</Person>
+</ResultList>

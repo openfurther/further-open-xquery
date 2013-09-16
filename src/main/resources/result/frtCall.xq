@@ -36,7 +36,7 @@ declare variable $docName as document-node() external;
 declare variable $srcNmspcId as xs:string external;
 
 (: Set DataSet ID :)
-declare variable $dataSetId as document-node() external;
+declare variable $dataSetId as xs:string external;
 
 (: END PROLOG :)
 

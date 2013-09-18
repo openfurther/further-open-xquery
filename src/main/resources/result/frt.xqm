@@ -409,7 +409,7 @@ modify (
   if ($inputCopy//*[@dtsFlag=$frt:ERROR]) then (
 
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
-    for $field in ($inputCopy//*[@dtsFlag=$frt:NO])[1]
+    for $field in ($inputCopy//*[@dtsFlag=$frt:ERROR])[1]
     let $attrName := fn:name($field)
       return
       replace node $inputCopy/*

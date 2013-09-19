@@ -120,6 +120,7 @@ declare function frt:transResult($inputXML as document-node(),
     else (: Continue Processing :)
     
 		  (: Read the Input File from External Result for Processing :)
+      (: Returns a document node for the following functions :)
 		  let $transResult := frt:process($mdrPerson,$inputXML,$extNmspcId,$dataSetId)
 
 		  (: Error Handling :)
@@ -280,6 +281,7 @@ declare function frt:process($mdrPerson,$extXML,$extNmspcId,$dataSetId)
   
   (: Loop to Return ALL External Root Objects :)
   return 
+  document{
   <ResultList>
     {
       for $extRoot at $i in $extXML/ResultList/*[fn:name()=$extRootObject]
@@ -288,6 +290,7 @@ declare function frt:process($mdrPerson,$extXML,$extNmspcId,$dataSetId)
       return frt:transPerson($mdrPerson,$extRoot,$extNmspcId,$dataSetId)
     }
   </ResultList>
+  }
 
 (: END Function :)
 };
@@ -391,7 +394,8 @@ return $transRootId
 (:==================================================================:)
 (: Validate (Error Handling)                                        :)
 (:==================================================================:)
-declare function frt:validate($inputXML,$srcNmspcName as xs:string)
+declare function frt:validate($inputXML as document-node(),$srcNmspcName as xs:string)
+as document-node()
 {
 (: BEGIN XQUERY TRANSFORMATION :)
 (: Make a copy of the entire Document :)
@@ -461,7 +465,7 @@ modify (
   
   (: Remove ALL Empty Namespace Nodes :)
 	(: Loop through Each Person rootObject :)
-	for $person in $inputCopy2/Person
+	for $person in $inputCopy2/ResultList/Person
 	
 	  (: For ALL Namespace Nodes :)
 	  for $nmspcNode in $person//*[fn:contains(fn:name(),'NamespaceId')]

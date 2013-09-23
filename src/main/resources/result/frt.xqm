@@ -269,6 +269,9 @@ return $inputCopy
 declare function frt:process($mdrPerson,$extXML,$extNmspcId,$dataSetId)
 {
   
+  (: Get the Namespace Name Using the Namespace ID :)
+  let $extNmspcName := further:getNamespaceName($extNmspcId)
+  
   (: High Level WorkFlow
 	  1) Find the rootObject in the External Model by using the extRootObject Attribute Hint
 	  2) For each rootObject in the External Model, create a mdrPerson Node and populate it with DTS Translated Data
@@ -281,17 +284,26 @@ declare function frt:process($mdrPerson,$extXML,$extNmspcId,$dataSetId)
   
   (: Loop to Return ALL External Root Objects :)
   return 
-  document{
-  <ResultList>
-    {
-      for $extRoot at $i in $extXML/ResultList/*[fn:name()=$extRootObject]
-      (: debug
-         return $extRootObject :)
-      return frt:transPerson($mdrPerson,$extRoot,$extNmspcId,$dataSetId)
+  
+  if ($extXML[ResultList]) then 
+	  document{
+		  <ResultList>
+		    {
+		      for $extRoot at $i in $extXML/ResultList/*[fn:name()=$extRootObject]
+		      (: debug
+		         return $extRootObject :)
+		      return frt:transPerson($mdrPerson,$extRoot,$extNmspcId,$dataSetId)
+		    }
+		  </ResultList>
+	  }
+  else
+    document {
+      <error xmlns="http://further.utah.edu/core/ws">
+        <code>INVALID_RESULTLIST_ERROR</code>
+        <message>Invalid ResultList for Namespace [ {$extNmspcName} ] </message>
+      </error>
     }
-  </ResultList>
-  }
-
+    
 (: END Function :)
 };
 
@@ -410,10 +422,10 @@ modify (
      if we take out the parentheses and the [1], we will list the all criterias with error.
      which we may want in the future. :)
   
-  if ($inputCopy//*[@dtsFlag=$frt:ERROR]) then (
+  if ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR]) then (
 
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
-    for $field in ($inputCopy//*[@dtsFlag=$frt:ERROR])[1]
+    for $field in ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR])[1]
     let $attrName := fn:name($field)
       return
       replace node $inputCopy/*
@@ -425,7 +437,7 @@ modify (
   )
   else(
     (: Remove ALL Nodes that have been Marked to be SKIPPED :)
-    delete node $inputCopy//*[@extPath=$frt:SKIP]
+    delete node $inputCopy/ResultList//*[@extPath=$frt:SKIP]
   ) (: End IF-Else Statement :)
   
 ) (: End Modify :)
@@ -446,15 +458,15 @@ copy $inputCopy1 := $inputXML
 modify (
   
   (: Remove ALL Empty Data Nodes :)
-  for $node in $inputCopy1//*[@extPath=$frt:EMPTY]
+  for $node in $inputCopy1/ResultList//*[@extPath=$frt:EMPTY]
     return delete node $node
         
   , (: Delete ALL tranFlag Attributes on SUCCESS :)
-  delete node $inputCopy1//@extRootObject,
-  delete node $inputCopy1//@centralRootObject,
-  delete node $inputCopy1//@extPath,
-  delete node $inputCopy1//@dtsTerm,
-  delete node $inputCopy1//@dtsFlag
+  delete node $inputCopy1/ResultList//@extRootObject,
+  delete node $inputCopy1/ResultList//@centralRootObject,
+  delete node $inputCopy1/ResultList//@extPath,
+  delete node $inputCopy1/ResultList//@dtsTerm,
+  delete node $inputCopy1/ResultList//@dtsFlag
   
 ) (: End Modify :)
 return

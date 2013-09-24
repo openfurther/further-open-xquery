@@ -78,6 +78,7 @@ declare variable $fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE as xs:string := 'ATTR_VALUE_
 declare variable $fqt:skipATTR as xs:string := 'skipAttr';
 declare variable $fqt:translateCode as xs:string := 'translateCode';
 declare variable $fqt:ageToBirthYear as xs:string := 'ageToBirthYear';
+declare variable $fqt:devNull as xs:string := 'devNull';
 
 (: DTS Static Property Names CASE SENSITIVE! :)
 declare variable $fqt:dtsSrcPropNm as xs:string := 'Code in Source';
@@ -326,12 +327,14 @@ modify (
                (: if there is a Result, ALWAYS Set translatedAttrName (Except for SKIP) :)
                (: The datatype for attribute name is always String, 
                   so there is no need for that Translation :)
-               
-               if ($mdrResult/.[translatedAttribute]) then
+               if ($mdrResult[translatedAttribute]) then
                  
                  (: if need to skip, update mdrFlag as fqt:SKIP :)
                  if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
                    replace value of node $c/@mdrFlag with $fqt:SKIP
+                 (: Error Out devNull Associations AFTER checking for Skipped :)
+                 else if ($mdrResult/translatedAttribute=$fqt:devNull) then
+                   replace value of node $c/@mdrFlag with $fqt:ERROR
                  else
                    let $translatedAttrName := $mdrResult/translatedAttribute/text()
                    return (

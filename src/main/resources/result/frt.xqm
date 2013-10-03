@@ -109,8 +109,8 @@ declare function frt:transResult($inputXML as document-node(),
   (: Initialize Empty Person Template with MDR Properties :)
   let $mdrPerson := frt:initPersonTemplate($emptyPerson,$extNmspcName)
   
-  return
-    
+  return   (:  $mdrPerson :)
+
     (: Validate Initialized Template :)
     if ($mdrPerson/*[@extRootObject=$frt:ERROR]) then
 
@@ -131,7 +131,7 @@ declare function frt:transResult($inputXML as document-node(),
 
 		  (: Return Final Cleaned Version :)
 		  return $cleaned
-
+  
 };
 
 
@@ -166,6 +166,8 @@ document
     <religion extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></religion>
     <multipleBirthIndicator extPath="{$frt:EMPTY}"></multipleBirthIndicator>
     <multipleBirthIndicatorOrderNumber extPath="{$frt:EMPTY}"></multipleBirthIndicatorOrderNumber>
+    <vitalStatusNamespaceId>{$frt:SNOMED}</vitalStatusNamespaceId>
+    <vitalStatus extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></vitalStatus>
     <causeOfDeathNamespaceId>{$frt:SNOMED}</causeOfDeathNamespaceId>
     <causeOfDeath extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></causeOfDeath>
     <dateOfDeath extPath="{$frt:EMPTY}"></dateOfDeath>
@@ -329,16 +331,24 @@ modify (
   for $field in $transFields//*[@extPath != $frt:EMPTY]
     (: Get the External Field Value using Dynamic Evaluation Function :)
     (: Full Path should be starting from under the rootObject node :)
-    (: Create a String to represent the Full Document Path :)
+    (: Create a String to represent the Full Document Path starting with a Slash '/' :)
     let $s := concat("$doc",$field/@extPath)
     (: Evaluate the String with a mapping to the document/element :)
     (: Took long time to figure this out, it is amazing when it works! :)
     let $extValue := xquery:eval($s,map {"doc" := $extPerson})
     let $cnt := fn:count($extValue)
     return (
-	    if ( $cnt > 1 ) then
-		    insert node attribute multiError {$cnt} into $field
-	      else
+
+	    if ( $cnt > 1 ) then (
+        (: Error Out if more than one value is found :)
+		    insert node attribute multiValueError {$cnt} into $field,
+        replace value of node $field/@extPath with $frt:SKIP
+      )
+      else if (fn:empty($extValue) or $extValue=$frt:EMPTY) then
+        (: if no value, Mark to Skip :)
+        replace value of node $field/@extPath with $frt:SKIP
+      else
+        (: Set Value for everything else :)
         replace value of node $field with $extValue
     )
 
@@ -349,8 +359,9 @@ return
 copy $transDTS := $transFields
 modify (
 
-  (: Get Data from External Person :)  
-  for $field in $transDTS//*[@dtsFlag=$frt:translateCode]
+  (: Get Data from External Person :)
+  (: NEED TO Translate VALUES THAT ARE NOT NULL!!! :)
+  for $field in $transDTS//*[@dtsFlag=$frt:translateCode and @extPath!=$frt:SKIP]
 
     let $dtsSrcPropVal := $field/text()
     let $tgTerm := $field/@dtsTerm
@@ -371,7 +382,12 @@ modify (
     (: Get Translated Value :)
     let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
      
-    return
+    return 
+    (: DEBUG :)
+    (: replace value of node $field with 
+         fn:concat($extNmspcId,'^',$frt:LocalCode,'^',$dtsSrcPropVal,'^',$tgTerm,'^',$frt:CodeInSource) :)
+    (: replace value of node $field with  $dtsURL :)
+
       if ($translatedPropVal) then (
         replace value of node $field with $translatedPropVal
         ,
@@ -381,6 +397,7 @@ modify (
         (: Always return Error if there is no DTS Mapping :)
         replace value of node $field/@dtsFlag with $frt:ERROR
 
+     
 ) (: End Modify :)
 return 
 
@@ -422,7 +439,7 @@ modify (
      if we take out the parentheses and the [1], we will list the all criterias with error.
      which we may want in the future. :)
   
-  if ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR]) then (
+  if ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR]) then 
 
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
     for $field in ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR])[1]
@@ -434,11 +451,25 @@ modify (
            <code>DTS_RESULT_TRANSLATION_ERROR</code>
            <message>DTS Mapping for [ {$srcNmspcName}.{$attrName} ] May be Missing</message>
          </error>
-  )
-  else(
+  
+  else if ($inputCopy/ResultList//*[@multiValueError]) then 
+    
+    (: Return the First Criteria that Errored so we do not have a long list of Errors :)
+    for $field in ($inputCopy/ResultList//*[@multiValueError])[1]
+    let $attrName := fn:name($field)
+      return
+      replace node $inputCopy/*
+         with
+         <error xmlns="http://further.utah.edu/core/ws">
+           <code>RESULT_TRANSLATION_ERROR</code>
+           <message>Invalid Multiple Values for [ {$srcNmspcName}.{$attrName} ]</message>
+         </error>
+  
+  else
     (: Remove ALL Nodes that have been Marked to be SKIPPED :)
     delete node $inputCopy/ResultList//*[@extPath=$frt:SKIP]
-  ) (: End IF-Else Statement :)
+  
+  (: End IF-Else Statement :)
   
 ) (: End Modify :)
 return $inputCopy
@@ -453,13 +484,13 @@ return $inputCopy
 declare function frt:cleanup($inputXML)
 {
 
-(: BEGIN XQUERY TRANSFORMATION :)
+(: BEGIN First XQUERY TRANSFORMATION :)
 copy $inputCopy1 := $inputXML
 modify (
   
   (: Remove ALL Empty Data Nodes :)
   for $node in $inputCopy1/ResultList//*[@extPath=$frt:EMPTY]
-    return delete node $node
+    return delete node $node 
         
   , (: Delete ALL tranFlag Attributes on SUCCESS :)
   delete node $inputCopy1/ResultList//@extRootObject,
@@ -471,7 +502,7 @@ modify (
 ) (: End Modify :)
 return
 
-(: BEGIN XQUERY TRANSFORMATION :)
+(: BEGIN Second XQUERY TRANSFORMATION :)
 copy $inputCopy2 := $inputCopy1
 modify (
   

@@ -15,17 +15,14 @@
  */
 package edu.utah.further.ds.omop.v2
 
-import org.apache.cxf.BusFactory;
 import org.custommonkey.xmlunit.Diff
-import org.custommonkey.xmlunit.XMLUnit
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.test.context.ContextConfiguration
 
-import spock.lang.Specification
 import spock.lang.Unroll
 import edu.utah.further.core.xml.xquery.XQueryService
+import edu.utah.further.ds.test.translations.TranslationTest
 import groovy.util.logging.Slf4j
 
 
@@ -45,25 +42,19 @@ import groovy.util.logging.Slf4j
  * @version Jul 3, 2013
  */
 @ContextConfiguration(locations = [
-	"/META-INF/ds/test/ds-test-mdr-ws-client-context.xml",
 	"/META-INF/ds/test/ds-test-mdr-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-dts-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-xquery-context.xml",
 	"/open-xquery-test-context.xml",
 ])
 @Slf4j
-class ITestSpecDsOmopV2QueryTranslator extends Specification {
+class ITestSpecDsOmopV2QueryTranslator extends TranslationTest {
 
 	@Autowired
 	XQueryService xQueryService
 
 	@Value('${server.mdr.ws}${path.mdr.ws.resource.path}/query/fqtCall.xq')
 	def url;
-
-	def setup() {
-		XMLUnit.setIgnoreWhitespace(true)
-		XMLUnit.setIgnoreComments(true)
-	}
 
 	@Unroll
 	def "Testing OMOPv2 Query Translations: #name"() {
@@ -74,30 +65,17 @@ class ITestSpecDsOmopV2QueryTranslator extends Specification {
 		def parameters = ["tgNmspcId" : "32868", "tgNmspcName" : "OMOP-V2"]
 		def result = xQueryService.executeIntoString(
 				new ByteArrayInputStream(xQuery.bytes), query, parameters)
-		query.close()
 		
 		expect:
 		new Diff(result, expected.text).similar()
+		query.close()
+		expected.close()
 
 
 		where:
 		query << queryFiles('/query-translator/input/*').values()
 		expected << queryFiles('/query-translator/omopv2/expected/*').values()
 		name << queryFiles('/query-translator/omopv2/expected/*').keySet()
-	}
-	
-	def cleanupSpec() {
-		BusFactory.getDefaultBus().shutdown(true);
-	}
-
-	/**
-	 * Returns an ORDERED list of inputstreams representing files at location.
-	 *
-	 * @return
-	 */
-	private def queryFiles(location) {
-		new PathMatchingResourcePatternResolver().getResources(location)
-				.collectEntries(new TreeMap()){[it.filename, it.inputStream]}
 	}
 	
 }

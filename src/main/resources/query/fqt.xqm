@@ -40,7 +40,7 @@ declare namespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
 (: DO NOT USE DEFAULT NAMESPACE, it may conflict with the response Namespaces :)
 
 (: Global CONSTANTS, Always Translating FROM FURTHeR Namespace ID :)
-(: declare variable $fqt:FURTHER := 'FURTHeR'; :)
+declare variable $fqt:FURTHeR := 'FURTHER';
 declare variable $fqt:FURTHER as xs:string := '32769';
 (: We are using SNOMED (Namespace ID 30) for ObservationType Values :)
 declare variable $fqt:SNOMED as xs:string := '30';
@@ -70,10 +70,15 @@ declare variable $fqt:ERROR as xs:string := 'E';
 (: Placeholder in case preTranslation Fails :)
 declare variable $fqt:ZERO as xs:string := '0';
 
+(: General Delimiter :)
+declare variable $fqt:DELIMITER as xs:string := '^';
+
 (: MDR Static Property Names CASE SENSITIVE! :)
 declare variable $fqt:ATTR_TRANS_FUNC as xs:string := 'ATTR_TRANS_FUNC';
 declare variable $fqt:ATTR_VALUE_TRANS_FUNC as xs:string := 'ATTR_VALUE_TRANS_FUNC';
 declare variable $fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE as xs:string := 'ATTR_VALUE_TRANS_TO_DATA_TYPE';
+declare variable $fqt:MORE_CRITERIA as xs:string := 'MORE_CRITERIA';
+declare variable $fqt:ATTR_ALIAS as xs:string := 'ATTR_ALIAS';
 
 declare variable $fqt:skipATTR as xs:string := 'skipAttr';
 declare variable $fqt:translateCode as xs:string := 'translateCode';
@@ -115,8 +120,11 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   (: Call transSingleCriteria :)
   let $translatedSingleCriteria := fqt:transSingleCriteria($translatedCriteriaPhrase,$targetNamespaceId)
 
+  (: Call transMoreCriteria :)
+  let $translatedMoreCriteria := fqt:transMoreCriteria($translatedSingleCriteria)
+
   (: Call transAlias :)
-  let $translatedAlias := fqt:transAlias($translatedSingleCriteria,$targetNamespaceId)
+  let $translatedAlias := fqt:transAlias($translatedMoreCriteria,$targetNamespaceId)
 
   (: Call updatedParmAlias :)
   let $updatedParmAlias := fqt:updateParmAlias($translatedAlias)
@@ -285,513 +293,586 @@ modify (
   
   (: Switch Case to Select which Parameters to Process Based on Search Type :)
   (: Switch Requires XQuery 1.1 or Above, but is easier to read and more scalable :)
-  return switch ($searchType)
-         
-         case 'SIMPLE' 
-           (: Parameter[2]=Attribute Name, 3 = Attribute Value :)
-           (: return ($criteria/parameters/parameter[2],$criteria/parameters/parameter[3]) :)
+  return
+    switch ($searchType)
+      case 'SIMPLE' 
+        (: Parameter[2]=Attribute Name, 3 = Attribute Value :)
+        (: return ($criteria/parameters/parameter[2],$criteria/parameters/parameter[3]) :)
+        return (
+ 
+          (: Get the Source Attribute Name :)
+          let $sourceAttrText := $c/fq:parameters/fq:parameter[2]/text()
+          let $sourceAttrName :=
+            if ($c/fq:parameters/fq:parameter[2 and @aliasKey]) then
+              let $aliasKey := fn:string($c/fq:parameters/fq:parameter[2]/@aliasKey)
+              return substring-after($sourceAttrText, concat($aliasKey,'.') )
+            else             
+              $sourceAttrText
+           
+           (: Strip out the Last Token in the Attribute Text :)
+           (: tokenize will return the entire string if separator is not found in string,
+           whereas string-after or string-after-last will return empty string.
+           Therefore, use tokenize and get the last token. Cool! :)
+           (: Data Format = RootEntity.TableName.AttributeName :)
+           (: The sourceAttrName needs to be set here so i can reference it in the return fn:replace :)
+           (: let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()] :)
+           (: let $mdrResponse := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
+  
+           (: There should ONLY be ONE Result per source Attribute :)
+           (: if there is more than one result, the criteriaType will determine which result is appropriate :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           
+           (: DEBUG :)
+           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
+           (: let $mdrTranslatedAttrName := 'Translated MDR Parm2 Name' :)
+           
            return (
-
-             (: Get the Source Attribute Name :)
-             let $sourceAttrText := $c/fq:parameters/fq:parameter[2]/text()
-             let $sourceAttrName :=
-               if ($c/fq:parameters/fq:parameter[2 and @aliasKey]) then
-                 let $aliasKey := fn:string($c/fq:parameters/fq:parameter[2]/@aliasKey)
-                 return substring-after($sourceAttrText, concat($aliasKey,'.') )
-               else             
-                 $sourceAttrText
-             
-             (: Strip out the Last Token in the Attribute Text :)
-             (: tokenize will return the entire string if separator is not found in string,
-             whereas string-after or string-after-last will return empty string.
-             Therefore, use tokenize and get the last token. Cool! :)
-             (: Data Format = RootEntity.TableName.AttributeName :)
-             (: The sourceAttrName needs to be set here so i can reference it in the return fn:replace :)
-             (: let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()] :)
-             (: let $mdrResponse := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-
-             (: There should ONLY be ONE Result per source Attribute :)
-             (: if there is more than one result, the criteriaType will determine which result is appropriate :)
-             let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
-             
-             (: DEBUG :)
-             (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-             (: let $mdrTranslatedAttrName := 'Translated MDR Parm2 Name' :)
-             
-             return (
-              
-               (: DEBUG 
-               replace value of node $c/fq:parameters/fq:parameter[2] 
-                  with $mdrURL :)
-
-               (: if there is a Result, ALWAYS Set translatedAttrName (Except for SKIP) :)
-               (: The datatype for attribute name is always String, 
-                  so there is no need for that Translation :)
-               if ($mdrResult[translatedAttribute]) then
-                 
-                 (: if need to skip, update mdrFlag as fqt:SKIP :)
-                 if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
-                   replace value of node $c/@mdrFlag with $fqt:SKIP
-                 (: Error Out devNull Associations AFTER checking for Skipped :)
-                 else if ($mdrResult/translatedAttribute=$fqt:devNull) then
-                   replace value of node $c/@mdrFlag with $fqt:ERROR
-                 else
-                   let $translatedAttrName := $mdrResult/translatedAttribute/text()
-                   return (
-                     replace value of node $c/fq:parameters/fq:parameter[2] 
-                        with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
-                        (: with $mdrURL :)
-                     ,
-                     replace value of node $c/@mdrFlag with $fqt:YES
-                   )                   
-               else (
+            
+             (: DEBUG 
+             replace value of node $c/fq:parameters/fq:parameter[2] 
+                with $mdrURL :)
+  
+             (: if there is a Result, ALWAYS Set translatedAttrName (Except for SKIP) :)
+             (: The datatype for attribute name is always String, 
+                so there is no need for that Translation :)
+             if ($mdrResult[translatedAttribute]) then
+               
+               (: if need to skip, update mdrFlag as fqt:SKIP :)
+               if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
+                 replace value of node $c/@mdrFlag with $fqt:SKIP
+               (: Error Out devNull Associations AFTER checking for Skipped :)
+               else if ($mdrResult/translatedAttribute=$fqt:devNull) then
                  replace value of node $c/@mdrFlag with $fqt:ERROR
-                 (: DEBUG :)
-                 (: replace value of node $c/fq:parameters/fq:parameter[2]
-                    with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
-               )
-               
-               , (: Process Code Translation Next :)
+               else
+                 let $translatedAttrName := $mdrResult/translatedAttribute/text()
+                 return (
+                   replace value of node $c/fq:parameters/fq:parameter[2]
+                      with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
+                      (: with $mdrURL :)
+                   ,
+                   replace value of node $c/@mdrFlag with $fqt:YES
+                   
+                   , (: Check for More Criteria :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:MORE_CRITERIA]
+                     let $propVal := $entry/value
+                     (: Get the Extra Criteria into an XML Attribute for later processing,
+                        Because we cannot simply APPEND a <criteria> onto another here. 
+                        We will process this XML Attribute moreCriteria in the transMoreCriteria Function :)
+                     return insert node attribute moreCriteria {$propVal} into $c
+                   
+                   , (: Check for New Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[2]
 
-               (: Determine if we need to Call DTS to Translate Coded Value :)
-               if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
-               
-                 let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[3]/text()
-                 
-                 (: Determine the Source Namespace ID since one is for the code, and the other is for the type :)
-                 (: This ONLY Happens to SIMPLE, Since that is where the Phrases Occur :)
-                 let $srcNamespaceId := 
-                   if ($sourceAttrName = 'observationType') then 
-                     $criteriaTypeNmspcId
-                   else 
-                     $srcNamespaceId
-                 
-                 (: Call DTS :)
-                 let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
-                                                                  $fqt:dtsSrcPropNm,
-                                                                  $dtsSrcPropVal,
-                                                                  $tgNamespaceId,
-                                                                  $fqt:dtsTgPropName)
-                 (: DEBUG DTS URL :)
-                 (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
-                                                                     $fqt:dtsSrcPropNm,
-                                                                     $dtsSrcPropVal,
-                                                                     $tgNamespaceId,
-                                                                     $fqt:dtsTgPropName) :)
-                                                                  
-                 (: let $debug := concat($srcNamespaceId,'|',
-                                      $fqt:dtsSrcPropNm,'|',
-                                      $dtsSrcPropVal,'|',
-                                      $tgNamespaceId,'|',
-                                      $fqt:dtsTgPropName) :)
-                                      
-                 (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
-                 let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-                 
-                 return
-                   if ($translatedPropVal) then (
-                     replace value of node $c/fq:parameters/fq:parameter[3]
-                        with $translatedPropVal
-                     ,
-                     replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:YES
-                   )
-                   else 
-                     (: Always return Error if there is no DTS Mapping :)
-                     replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR
-                     
-               else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
-               
-                 (: Get the Source Value to be Translated :)
-                 let $srcVal := $c/fq:parameters/fq:parameter[3]/text()  
-                 return
-                   replace value of node $c/fq:parameters/fq:parameter[3]
-                      with fqt:ageToBirthYear($srcVal)
-               else()
-               
-               , (: Determine if we need to Translate the DataType :)
-               (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
-               (: Try ask Rick, maybe it is currently hard coded :)
-               for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
-                 let $newDataType := $entry/value/text()
-                 return replace value of node $c/fq:parameters/fq:parameter[3]/@xsi:type with $newDataType
-
-               , (: Do More Stuff :)
-               (: Always Set Translation Flag after Translation :)
-               if ($mdrResult[translatedAttribute]) then
-                 replace value of node $c/@transFlag with $fqt:YES
-               else replace value of node $c/@transFlag with $fqt:ERROR
-               
+                 )                   
+             else (
+               replace value of node $c/@mdrFlag with $fqt:ERROR
+               (: DEBUG :)
+               (: replace value of node $c/fq:parameters/fq:parameter[2]
+                  with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
              )
              
-           ) (: END SIMPLE Return :)
-         
-         case 'BETWEEN' 
-           (: Parameter[1]=Attribute Name, 2 & 3 = Attribute Value :)
-           return (
+             , (: Process Code Translation Next :)
+  
+             (: Determine if we need to Call DTS to Translate Coded Value :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
              
-             (: Get the Source Attribute Name :)
-             let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
-             let $sourceAttrName :=
-               if ($c/fq:parameters/fq:parameter[1 and @aliasKey]) then
-                 let $aliasKey := fn:string($c/fq:parameters/fq:parameter[1]/@aliasKey)
-                 return substring-after($sourceAttrText, concat($aliasKey,'.') )
-               else             
-                 $sourceAttrText
-
-             (: Call MDR Web Service to Translate Attribute Name HERE :)
-             let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
-             (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-             (: let $translatedAttrName := 'Translated MDR Name' :)
-
-             return (
-               (: if there is a Result, ALWAYS Set translatedAttrName :)
-               (: The datatype for attribute name is always String, 
-                  so there is no need for that Translation :)
-               if ($mdrResult/.[translatedAttribute]) then
+               let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[3]/text()
                
-                 (: if need to skip, update mdrFlag as fqt:SKIP :)
-                 if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
-                   replace value of node $c/@mdrFlag with $fqt:SKIP
-                 else
-                   let $translatedAttrName := $mdrResult/translatedAttribute/text()
-                   return (
-                     replace value of node $c/fq:parameters/fq:parameter[1] 
-                        with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
-                     ,
-                     replace value of node $c/@mdrFlag with $fqt:YES
-                   )
-               else (
-                 replace value of node $c/@mdrFlag with $fqt:ERROR
-                 (: DEBUG :)
-                 (: replace value of node $c/fq:parameters/fq:parameter[1]
-                    with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
-               )
+               (: Determine the Source Namespace ID since one is for the code, and the other is for the type :)
+               (: This ONLY Happens to SIMPLE, Since that is where the Phrases Occur :)
+               let $srcNamespaceId := 
+                 if ($sourceAttrName = 'observationType') then 
+                   $criteriaTypeNmspcId
+                 else 
+                   $srcNamespaceId
                
-               , (: Process Code Translation Next Parameters 2 & 3 :)
-
-               (: Determine if we need to Call DTS to Translate Coded Value :)
-               if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
-               
-                 let $dtsSrcPropVal2 := $c/fq:parameters/fq:parameter[2]/text()
-                 let $dtsSrcPropVal3 := $c/fq:parameters/fq:parameter[3]/text()
-                                 
-                 (: Call DTS for Parameter 2 :)
-                 let $dtsResponse2 := further:getTranslatedConcept($srcNamespaceId,
+               (: Call DTS :)
+               let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
+                                                                $fqt:dtsSrcPropNm,
+                                                                $dtsSrcPropVal,
+                                                                $tgNamespaceId,
+                                                                $fqt:dtsTgPropName)
+               (: DEBUG DTS URL :)
+               (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
                                                                    $fqt:dtsSrcPropNm,
-                                                                   $dtsSrcPropVal2,
+                                                                   $dtsSrcPropVal,
                                                                    $tgNamespaceId,
-                                                                   $fqt:dtsTgPropName)
-                                                                  
-                 (: Call DTS for Parameter 3 :)
-                 let $dtsResponse3 := further:getTranslatedConcept($srcNamespaceId,
-                                                                   $fqt:dtsSrcPropNm,
-                                                                   $dtsSrcPropVal3,
-                                                                   $tgNamespaceId,
-                                                                   $fqt:dtsTgPropName)
-                 (: Debug DTS URL :)
-                 (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
-                                                                     $fqt:dtsSrcPropNm,
-                                                                     $dtsSrcPropVal2,
-                                                                     $tgNamespaceId,
-                                                                     $fqt:dtsTgPropName) :)
-
-                 (: let $debug := concat($srcNamespaceId,'|',
-                                      $fqt:dtsSrcPropNm,'|',
-                                      $dtsSrcPropVal2,'|',
-                                      $tgNamespaceId,'|',
-                                      $fqt:dtsTgPropName) :)
-
-                 let $translatedPropVal2 := further:getConceptPropertyValue($dtsResponse2)
-                 let $translatedPropVal3 := further:getConceptPropertyValue($dtsResponse3)
-                 
-                 return (
-                   
-                   if ($translatedPropVal2) then (
-                     replace value of node $c/fq:parameters/fq:parameter[2]
-                        with $translatedPropVal2,
-                     replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
-                   )
-                   else (: ERROR :)
-                     replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR
-                   ,
-
-                   if ($translatedPropVal3) then (
-                     replace value of node $c/fq:parameters/fq:parameter[3]
-                        with $translatedPropVal3,
-                     replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:YES
-                   )
-                   else (: ERROR :)
-                     replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR
-
-                 ) (: End Replace Return :)
-                 
-               else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
+                                                                   $fqt:dtsTgPropName) :)
+                                                                
+               (: let $debug := concat($srcNamespaceId,'|',
+                                    $fqt:dtsSrcPropNm,'|',
+                                    $dtsSrcPropVal,'|',
+                                    $tgNamespaceId,'|',
+                                    $fqt:dtsTgPropName) :)
+                                    
+               (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
+               let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
                
-                 (: Get the Source Value to be Translated :)
-                 let $srcValue2 := $c/fq:parameters/fq:parameter[2]/text()
-                 let $srcValue3 := $c/fq:parameters/fq:parameter[3]/text()
-
-                 (: Reverse the Order of 2 & 3 for this Special Case Since the Smaller BirthYear Must come First :)                        
-                 return (
-                   replace value of node $c/fq:parameters/fq:parameter[2]
-                      with fqt:ageToBirthYear($srcValue3),
+               return
+                 if ($translatedPropVal) then (
                    replace value of node $c/fq:parameters/fq:parameter[3]
-                      with fqt:ageToBirthYear($srcValue2)
-                 )
-               
-               else()
-                 
-               , (: Determine if we need to Translate the DataType :)
-               (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
-               (: Try ask Rick, maybe it is currently hard coded :)
-               for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
-                 let $newDataType := $entry/value/text()
-                 return (
-                   replace value of node $c/fq:parameters/fq:parameter[2]/@xsi:type with $newDataType
+                      with $translatedPropVal
                    ,
-                   replace value of node $c/fq:parameters/fq:parameter[3]/@xsi:type with $newDataType
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:YES
                  )
-                 
-               , (: Do More Stuff :)
-               (: Always Set Translation Flag after Translation :)
-               if ($mdrResult[translatedAttribute]) then
-                 replace value of node $c/@transFlag with $fqt:YES
-               else replace value of node $c/@transFlag with $fqt:ERROR
-             
-             ) (: End Second Return :)
-             
-           ) (: End BETWEEN Return :)
-                    
-         case 'LIKE' 
-           (: Parameter[1]=Attribute Name, Parameter[2] = Attribute Value :)
-           return (
-
-             (: Get the Source Attribute Name :)
-             let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
-             let $sourceAttrName :=
-               if ($c/fq:parameters/fq:parameter[1 and @aliasKey]) then
-                 let $aliasKey := fn:string($c/fq:parameters/fq:parameter[1]/@aliasKey)
-                 return substring-after($sourceAttrText, concat($aliasKey,'.') )
-               else             
-                 $sourceAttrText
-             (:
-             let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
-             let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()]
-             :)
-             (: Call MDR Web Service to Translate Attribute Name HERE :)
-             let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
-             (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-             (: let $translatedAttrName := 'Translated MDR Name' :)
-             return (
-               if ($mdrResult/.[translatedAttribute]) then 
-               
-                 (: if need to skip, update mdrFlag as fqt:SKIP :)
-                 if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
-                   replace value of node $c/@mdrFlag with $fqt:SKIP
-                 else
-                   let $translatedAttrName := $mdrResult/translatedAttribute/text()
-                   return (
-                     replace value of node $c/fq:parameters/fq:parameter[1]
-                             with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
-                     ,
-                     replace value of node $c/@mdrFlag with $fqt:YES
-                   )
-               else (
-                 replace value of node $c/@mdrFlag with $fqt:ERROR
-                 (: DEBUG :)
-                 (: replace value of node $c/fq:parameters/fq:parameter[1]
-                    with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
-               )
-               
-               , (: Comma to Separate Sequence Items :)
-
-               (: Determine if we need to Call DTS to Translate Coded Value :)
-               if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
-               
-                 let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[2]/text()
-                 
-                 (: Call DTS :)
-                 let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
-                                                                  $fqt:dtsSrcPropNm,
-                                                                  $dtsSrcPropVal,
-                                                                  $tgNamespaceId,
-                                                                  $fqt:dtsTgPropName)
-                 (: Debug DTS URL :)
-                 (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
-                                                                     $fqt:dtsSrcPropNm,
-                                                                     $dtsSrcPropVal,
-                                                                     $tgNamespaceId,
-                                                                     $fqt:dtsTgPropName) :)
-                                                                  
-                 (: let $dtsResponse := fqt:getDTSAttrValue($srcNamespaceId,$fqt:dtsSrcPropNm,$dtsSrcPropVal,$tgNamespaceId,$fqt:dtsTgPropName) :)
-                 (: let $translatedPropVal := 'Translated MDR Parm3 Value' :)
-                 
-                 (: let $debug := concat($srcNamespaceId,'|',
-                                      $fqt:dtsSrcPropNm,'|',
-                                      $dtsSrcPropVal,'|',
-                                      $tgNamespaceId,'|',
-                                      $fqt:dtsTgPropName) :)
-                                      
-                 (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
-                 let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-                 
-                 return
-                   if ($translatedPropVal) then (
-                     replace value of node $c/fq:parameters/fq:parameter[2]
-                        with $translatedPropVal
-                     ,
-                     replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
-                   )
-                   else replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR
+                 else 
+                   (: Always return Error if there is no DTS Mapping :)
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR
                    
-               else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
-               
-                 (: Get the Source Value to be Translated :)
-                 let $srcVal := $c/fq:parameters/fq:parameter[2]/text()
-                 return
-                   replace value of node $c/fq:parameters/fq:parameter[2]
-                      with fqt:ageToBirthYear($srcVal)
-
-               else()
-               
-               , (: Determine if we need to Translate the DataType :)
-               (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
-               (: Try ask Rick, maybe it is currently hard coded :)
-               for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
-                 let $newDataType := $entry/value/text()
-                 return replace value of node $c/fq:parameters/fq:parameter[2]/@xsi:type with $newDataType
-
-               , (: Do More Stuff :)
-               (: Always Set Translation Flag after Translation :)
-               if ($mdrResult[translatedAttribute]) then
-                 replace value of node $c/@transFlag with $fqt:YES
-               else replace value of node $c/@transFlag with $fqt:ERROR
-               
-             ) (: End Second Return :)
+             else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
-           ) (: End LIKE Return :)
-         
-         case 'IN'
-           (: Parameter[1]=Attribute Name, Multiple Attribute Values :)
-           return(
+               (: Get the Source Value to be Translated :)
+               let $srcVal := $c/fq:parameters/fq:parameter[3]/text()  
+               return
+                 replace value of node $c/fq:parameters/fq:parameter[3]
+                    with fqt:ageToBirthYear($srcVal)
+             else()
              
-             (: Get the Source Attribute Name :)
-             let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
-             let $sourceAttrName :=
-               if ($c/fq:parameters/fq:parameter[1 and @aliasKey]) then
-                 let $aliasKey := fn:string($c/fq:parameters/fq:parameter[1]/@aliasKey)
-                 return substring-after($sourceAttrText, concat($aliasKey,'.') )
-               else             
-                 $sourceAttrText
-                 
-             (:             
-             let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
-             let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()]
-             :)
-             (: Call MDR Web Service to Translate Attribute Name HERE :)
-             let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
-             return (
-               if ($mdrResult/.[translatedAttribute]) then
-               
-                 (: if need to skip, update mdrFlag as fqt:SKIP :)
-                 if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
-                   replace value of node $c/@mdrFlag with $fqt:SKIP
-                 else
-                   let $translatedAttrName := $mdrResult/translatedAttribute/text()
-                   return (
-                     replace value of node $c/fq:parameters/fq:parameter[1]
-                        with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
-                     ,
-                     replace value of node $c/@mdrFlag with $fqt:YES
-                   )
-               else (
-                 replace value of node $c/@mdrFlag with $fqt:ERROR
-                 (: DEBUG :)
-                 (: replace value of node $c/fq:parameters/fq:parameter[1]
-                       with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
-               )
-
-               , (: Process DTS Stuff :)
-               (: Determine if we need to Call DTS to Translate Coded Value :)
-               if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
-
-                 (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
-                 (: The first parameter is the Attribute Name, the rest are Attribute Values :)
-                 for $parm in $c/fq:parameters/fq:parameter[position()>1]
-                   
-                   (:return
-                   
-                     if ($index>1) then 
-                     
-                       let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[$index]/text():)
-                     
-                       (: Call DTS :)
-                       let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
-                                                                        $fqt:dtsSrcPropNm,
-                                                                        $parm,
-                                                                        $tgNamespaceId,
-                                                                        $fqt:dtsTgPropName)
-                       (: Debug DTS URL :)
-                       (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
-                                                                           $fqt:dtsSrcPropNm,
-                                                                           $parm,
-                                                                           $tgNamespaceId,
-                                                                           $fqt:dtsTgPropName) :)
-                                                                   
-                       let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-                     
-                       return
-                         if ($translatedPropVal) then (
-                           replace value of node $parm with $translatedPropVal
-                           ,
-                           replace value of node $parm/@dtsFlag with $fqt:YES
-                         )
-                         else replace value of node $parm/@dtsFlag with $fqt:ERROR
-             
-               else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
-               
-                 (: Get the Source Value to be Translated :)
-                 (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
-                 for $param at $index in ($criteria/fq:parameters/*) 
-             
-                   (: The first parameter is the Attribute Name, the rest are Attribute Values :)
-                   return
-                   
-                     if ($index>1) then
-                       let $srcVal := $c/fq:parameters/fq:parameter[$index]/text()
-                       return
-                         replace value of node $c/fq:parameters/fq:parameter[$index]
-                            with fqt:ageToBirthYear($srcVal)
-
-                     else( (: End Inner IF :) )
-
-               else( (: End Outter IF :) )
-
              , (: Determine if we need to Translate the DataType :)
+             (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
+             (: Try ask Rick, maybe it is currently hard coded :)
              for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
                let $newDataType := $entry/value/text()
-               return
-                 (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
-                 for $param at $index in ($criteria/fq:parameters/*) 
-                   (: The first parameter is the Attribute Name, the rest are Attribute Values :)
-                   return
-                     if ($index>1) then
-                       replace value of node $c/fq:parameters/fq:parameter[$index]/@xsi:type with $newDataType
-                     else( (: DO NOTHING :) )
-
+               return replace value of node $c/fq:parameters/fq:parameter[3]/@xsi:type with $newDataType
+  
              , (: Do More Stuff :)
              (: Always Set Translation Flag after Translation :)
              if ($mdrResult[translatedAttribute]) then
                replace value of node $c/@transFlag with $fqt:YES
              else replace value of node $c/@transFlag with $fqt:ERROR
-                 
-             ) (: End Second Return :)
-               
-           ) (: End IN Return :)
-         
-         default return <error>Invalid searchType in transCriteria function</error>
-         (: End Switch Case :)
+             
+           )
+           
+         ) (: END SIMPLE Return :)
+       
+       case 'BETWEEN' 
+         (: Parameter[1]=Attribute Name, 2 & 3 = Attribute Value :)
+         return (
+           
+           (: Get the Source Attribute Name :)
+           let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
+           let $sourceAttrName :=
+             if ($c/fq:parameters/fq:parameter[1 and @aliasKey]) then
+               let $aliasKey := fn:string($c/fq:parameters/fq:parameter[1]/@aliasKey)
+               return substring-after($sourceAttrText, concat($aliasKey,'.') )
+             else             
+               $sourceAttrText
+  
+           (: Call MDR Web Service to Translate Attribute Name HERE :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
+           (: let $translatedAttrName := 'Translated MDR Name' :)
+  
+           return (
+             (: if there is a Result, ALWAYS Set translatedAttrName :)
+             (: The datatype for attribute name is always String, 
+                so there is no need for that Translation :)
+             if ($mdrResult/.[translatedAttribute]) then
+             
+               (: if need to skip, update mdrFlag as fqt:SKIP :)
+               if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
+                 replace value of node $c/@mdrFlag with $fqt:SKIP
+               (: Error Out devNull Associations AFTER checking for Skipped :)
+               else if ($mdrResult/translatedAttribute=$fqt:devNull) then
+                 replace value of node $c/@mdrFlag with $fqt:ERROR
+               else
+                 let $translatedAttrName := $mdrResult/translatedAttribute/text()
+                 return (
+                   replace value of node $c/fq:parameters/fq:parameter[1] 
+                      with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
+                   ,
+                   replace value of node $c/@mdrFlag with $fqt:YES
+                   
+                   , (: Check for More Criteria :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:MORE_CRITERIA]
+                     let $propVal := $entry/value
+                     (: Get the Extra Criteria into an XML Attribute for later processing,
+                        Because we cannot simply APPEND a <criteria> onto another here. 
+                        We will process this XML Attribute moreCriteria in the transMoreCriteria Function :)
+                     return insert node attribute moreCriteria {$propVal} into $c
+                   
+                   , (: Check for New Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
 
+                 )
+             else (
+               replace value of node $c/@mdrFlag with $fqt:ERROR
+               (: DEBUG :)
+               (: replace value of node $c/fq:parameters/fq:parameter[1]
+                  with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
+             )
+             
+             , (: Process Code Translation Next Parameters 2 & 3 :)
+  
+             (: Determine if we need to Call DTS to Translate Coded Value :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
+             
+               let $dtsSrcPropVal2 := $c/fq:parameters/fq:parameter[2]/text()
+               let $dtsSrcPropVal3 := $c/fq:parameters/fq:parameter[3]/text()
+                               
+               (: Call DTS for Parameter 2 :)
+               let $dtsResponse2 := further:getTranslatedConcept($srcNamespaceId,
+                                                                 $fqt:dtsSrcPropNm,
+                                                                 $dtsSrcPropVal2,
+                                                                 $tgNamespaceId,
+                                                                 $fqt:dtsTgPropName)
+                                                                
+               (: Call DTS for Parameter 3 :)
+               let $dtsResponse3 := further:getTranslatedConcept($srcNamespaceId,
+                                                                 $fqt:dtsSrcPropNm,
+                                                                 $dtsSrcPropVal3,
+                                                                 $tgNamespaceId,
+                                                                 $fqt:dtsTgPropName)
+               (: Debug DTS URL :)
+               (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
+                                                                   $fqt:dtsSrcPropNm,
+                                                                   $dtsSrcPropVal2,
+                                                                   $tgNamespaceId,
+                                                                   $fqt:dtsTgPropName) :)
+  
+               (: let $debug := concat($srcNamespaceId,'|',
+                                    $fqt:dtsSrcPropNm,'|',
+                                    $dtsSrcPropVal2,'|',
+                                    $tgNamespaceId,'|',
+                                    $fqt:dtsTgPropName) :)
+  
+               let $translatedPropVal2 := further:getConceptPropertyValue($dtsResponse2)
+               let $translatedPropVal3 := further:getConceptPropertyValue($dtsResponse3)
+               
+               return (
+                 
+                 if ($translatedPropVal2) then (
+                   replace value of node $c/fq:parameters/fq:parameter[2]
+                      with $translatedPropVal2,
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
+                 )
+                 else (: ERROR :)
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR
+                 ,
+  
+                 if ($translatedPropVal3) then (
+                   replace value of node $c/fq:parameters/fq:parameter[3]
+                      with $translatedPropVal3,
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:YES
+                 )
+                 else (: ERROR :)
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR
+  
+               ) (: End Replace Return :)
+               
+             else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
+             
+               (: Get the Source Value to be Translated :)
+               let $srcValue2 := $c/fq:parameters/fq:parameter[2]/text()
+               let $srcValue3 := $c/fq:parameters/fq:parameter[3]/text()
+  
+               (: Reverse the Order of 2 & 3 for this Special Case Since the Smaller BirthYear Must come First :)                        
+               return (
+                 replace value of node $c/fq:parameters/fq:parameter[2]
+                    with fqt:ageToBirthYear($srcValue3),
+                 replace value of node $c/fq:parameters/fq:parameter[3]
+                    with fqt:ageToBirthYear($srcValue2)
+               )
+             
+             else()
+               
+             , (: Determine if we need to Translate the DataType :)
+             (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
+             (: Try ask Rick, maybe it is currently hard coded :)
+             for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
+               let $newDataType := $entry/value/text()
+               return (
+                 replace value of node $c/fq:parameters/fq:parameter[2]/@xsi:type with $newDataType
+                 ,
+                 replace value of node $c/fq:parameters/fq:parameter[3]/@xsi:type with $newDataType
+               )
+               
+             , (: Do More Stuff :)
+             (: Always Set Translation Flag after Translation :)
+             if ($mdrResult[translatedAttribute]) then
+               replace value of node $c/@transFlag with $fqt:YES
+             else replace value of node $c/@transFlag with $fqt:ERROR
+           
+           ) (: End Second Return :)
+           
+         ) (: End BETWEEN Return :)
+                  
+       case 'LIKE' 
+         (: Parameter[1]=Attribute Name, Parameter[2] = Attribute Value :)
+         return (
+  
+           (: Get the Source Attribute Name :)
+           let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
+           let $sourceAttrName :=
+             if ($c/fq:parameters/fq:parameter[1 and @aliasKey]) then
+               let $aliasKey := fn:string($c/fq:parameters/fq:parameter[1]/@aliasKey)
+               return substring-after($sourceAttrText, concat($aliasKey,'.') )
+             else             
+               $sourceAttrText
+           (:
+           let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
+           let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()]
+           :)
+           (: Call MDR Web Service to Translate Attribute Name HERE :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
+           (: let $translatedAttrName := 'Translated MDR Name' :)
+           return (
+             if ($mdrResult/.[translatedAttribute]) then 
+             
+               (: if need to skip, update mdrFlag as fqt:SKIP :)
+               if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
+                 replace value of node $c/@mdrFlag with $fqt:SKIP
+               (: Error Out devNull Associations AFTER checking for Skipped :)
+               else if ($mdrResult/translatedAttribute=$fqt:devNull) then
+                 replace value of node $c/@mdrFlag with $fqt:ERROR
+               else
+                 let $translatedAttrName := $mdrResult/translatedAttribute/text()
+                 return (
+                   replace value of node $c/fq:parameters/fq:parameter[1]
+                           with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
+                   ,
+                   replace value of node $c/@mdrFlag with $fqt:YES
+                   
+                   , (: Check for More Criteria :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:MORE_CRITERIA]
+                     let $propVal := $entry/value
+                     (: Get the Extra Criteria into an XML Attribute for later processing,
+                        Because we cannot simply APPEND a <criteria> onto another here. 
+                        We will process this XML Attribute moreCriteria in the transMoreCriteria Function :)
+                     return insert node attribute moreCriteria {$propVal} into $c
+                   
+                   , (: Check for New Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
+
+                 )
+             else (
+               replace value of node $c/@mdrFlag with $fqt:ERROR
+               (: DEBUG :)
+               (: replace value of node $c/fq:parameters/fq:parameter[1]
+                  with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
+             )
+             
+             , (: Comma to Separate Sequence Items :)
+  
+             (: Determine if we need to Call DTS to Translate Coded Value :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
+             
+               let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[2]/text()
+               
+               (: Call DTS :)
+               let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
+                                                                $fqt:dtsSrcPropNm,
+                                                                $dtsSrcPropVal,
+                                                                $tgNamespaceId,
+                                                                $fqt:dtsTgPropName)
+               (: Debug DTS URL :)
+               (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
+                                                                   $fqt:dtsSrcPropNm,
+                                                                   $dtsSrcPropVal,
+                                                                   $tgNamespaceId,
+                                                                   $fqt:dtsTgPropName) :)
+                                                                
+               (: let $dtsResponse := fqt:getDTSAttrValue($srcNamespaceId,$fqt:dtsSrcPropNm,$dtsSrcPropVal,$tgNamespaceId,$fqt:dtsTgPropName) :)
+               (: let $translatedPropVal := 'Translated MDR Parm3 Value' :)
+               
+               (: let $debug := concat($srcNamespaceId,'|',
+                                    $fqt:dtsSrcPropNm,'|',
+                                    $dtsSrcPropVal,'|',
+                                    $tgNamespaceId,'|',
+                                    $fqt:dtsTgPropName) :)
+                                    
+               (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
+               let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
+               
+               return
+                 if ($translatedPropVal) then (
+                   replace value of node $c/fq:parameters/fq:parameter[2]
+                      with $translatedPropVal
+                   ,
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
+                 )
+                 else replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR
+                 
+             else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
+             
+               (: Get the Source Value to be Translated :)
+               let $srcVal := $c/fq:parameters/fq:parameter[2]/text()
+               return
+                 replace value of node $c/fq:parameters/fq:parameter[2]
+                    with fqt:ageToBirthYear($srcVal)
+  
+             else()
+             
+             , (: Determine if we need to Translate the DataType :)
+             (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
+             (: Try ask Rick, maybe it is currently hard coded :)
+             for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
+               let $newDataType := $entry/value/text()
+               return replace value of node $c/fq:parameters/fq:parameter[2]/@xsi:type with $newDataType
+  
+             , (: Do More Stuff :)
+             (: Always Set Translation Flag after Translation :)
+             if ($mdrResult[translatedAttribute]) then
+               replace value of node $c/@transFlag with $fqt:YES
+             else replace value of node $c/@transFlag with $fqt:ERROR
+             
+           ) (: End Second Return :)
+           
+         ) (: End LIKE Return :)
+       
+       case 'IN'
+         (: Parameter[1]=Attribute Name, Multiple Attribute Values :)
+         return(
+           
+           (: Get the Source Attribute Name :)
+           let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
+           let $sourceAttrName :=
+             if ($c/fq:parameters/fq:parameter[1 and @aliasKey]) then
+               let $aliasKey := fn:string($c/fq:parameters/fq:parameter[1]/@aliasKey)
+               return substring-after($sourceAttrText, concat($aliasKey,'.') )
+             else             
+               $sourceAttrText
+               
+           (:             
+           let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
+           let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()]
+           :)
+           (: Call MDR Web Service to Translate Attribute Name HERE :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           return (
+             if ($mdrResult/.[translatedAttribute]) then
+             
+               (: if need to skip, update mdrFlag as fqt:SKIP :)
+               if ($mdrResult/properties/entry[key=$fqt:ATTR_TRANS_FUNC and value=$fqt:skipATTR]) then
+                 replace value of node $c/@mdrFlag with $fqt:SKIP
+               (: Error Out devNull Associations AFTER checking for Skipped :)
+               else if ($mdrResult/translatedAttribute=$fqt:devNull) then
+                 replace value of node $c/@mdrFlag with $fqt:ERROR
+               else
+                 let $translatedAttrName := $mdrResult/translatedAttribute/text()
+                 return (
+                   replace value of node $c/fq:parameters/fq:parameter[1]
+                      with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
+                   ,
+                   replace value of node $c/@mdrFlag with $fqt:YES
+                   
+                   , (: Check for More Criteria :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:MORE_CRITERIA]
+                     let $propVal := $entry/value
+                     (: Get the Extra Criteria into an XML Attribute for later processing,
+                        Because we cannot simply APPEND a <criteria> onto another here. 
+                        We will process this XML Attribute moreCriteria in the transMoreCriteria Function :)
+                     return insert node attribute moreCriteria {$propVal} into $c
+                   
+                   , (: Check for New Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
+
+                 )
+             else (
+               replace value of node $c/@mdrFlag with $fqt:ERROR
+               (: DEBUG :)
+               (: replace value of node $c/fq:parameters/fq:parameter[1]
+                     with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
+             )
+  
+             , (: Process DTS Stuff :)
+             (: Determine if we need to Call DTS to Translate Coded Value :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
+  
+               (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
+               (: The first parameter is the Attribute Name, the rest are Attribute Values :)
+               for $parm in $c/fq:parameters/fq:parameter[position()>1]
+                 
+                 (:return
+                 
+                   if ($index>1) then 
+                   
+                     let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[$index]/text():)
+                   
+                     (: Call DTS :)
+                     let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
+                                                                      $fqt:dtsSrcPropNm,
+                                                                      $parm,
+                                                                      $tgNamespaceId,
+                                                                      $fqt:dtsTgPropName)
+                     (: Debug DTS URL :)
+                     (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
+                                                                         $fqt:dtsSrcPropNm,
+                                                                         $parm,
+                                                                         $tgNamespaceId,
+                                                                         $fqt:dtsTgPropName) :)
+                                                                 
+                     let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
+                   
+                     return
+                       if ($translatedPropVal) then (
+                         replace value of node $parm with $translatedPropVal
+                         ,
+                         replace value of node $parm/@dtsFlag with $fqt:YES
+                       )
+                       else replace value of node $parm/@dtsFlag with $fqt:ERROR
+           
+             else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
+             
+               (: Get the Source Value to be Translated :)
+               (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
+               for $param at $index in ($criteria/fq:parameters/*) 
+           
+                 (: The first parameter is the Attribute Name, the rest are Attribute Values :)
+                 return
+                 
+                   if ($index>1) then
+                     let $srcVal := $c/fq:parameters/fq:parameter[$index]/text()
+                     return
+                       replace value of node $c/fq:parameters/fq:parameter[$index]
+                          with fqt:ageToBirthYear($srcVal)
+  
+                   else( (: End Inner IF :) )
+  
+             else( (: End Outter IF :) )
+  
+           , (: Determine if we need to Translate the DataType :)
+           for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
+             let $newDataType := $entry/value/text()
+             return
+               (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
+               for $param at $index in ($criteria/fq:parameters/*) 
+                 (: The first parameter is the Attribute Name, the rest are Attribute Values :)
+                 return
+                   if ($index>1) then
+                     replace value of node $c/fq:parameters/fq:parameter[$index]/@xsi:type with $newDataType
+                   else( (: DO NOTHING :) )
+  
+           , (: Do More Stuff :)
+           (: Always Set Translation Flag after Translation :)
+           if ($mdrResult[translatedAttribute]) then
+             replace value of node $c/@transFlag with $fqt:YES
+           else replace value of node $c/@transFlag with $fqt:ERROR
+               
+           ) (: End Second Return :)
+             
+         ) (: End IN Return :)
+       
+       default return <error>Invalid searchType in transCriteria function</error>
+       (: End Switch Case :)
+       
 (: End Modify :)
 )
 
@@ -812,14 +893,6 @@ declare function fqt:transAlias($inputXML as document-node(),
 copy $inputCopy := $inputXML
 modify (
 
-  (: Determin if Person translates to a Non-Person Table :)
-  (: The Problem is that FURTHER Person fields do not have an Alias.
-     So if it translates to a Non-Person Fields at the Target, 
-     We need to provide the target alias in the translated XML. 
-     In our XML, we need to get from fieldName to targetAlias.fieldName :)
-  (: For example, FURTHER.PERSON.VITAL_STATUS trans to OMOPv2.OBSERVATION_PERIOD.PERSON_STATUS_CONCEPT_ID :)
-  (: We're not using this field for now, but would be nice to have this functionality in place :)
-  
   (: Translate Aliases :)
   (: Must Translated the entire group of <aliases> at one time
      Because the replace cannot update single <alias> node with multiple <alias> nodes 
@@ -874,7 +947,50 @@ modify (
     ) (: End Return :)
 
 ) (: End Modify :)
-return $inputCopy
+return 
+
+(: BEGIN Second XQUERY TRANSFORMATION :)
+copy $inputCopy2 := $inputCopy
+modify (
+  
+  (: Add Alias for Special Cases :)
+  (: Use Case 1 = We are adding Aliases for New Criteria nodes Here :)
+  (: Use Case 2 = Determin if Person translates to a Non-Person Table :)
+  (: The Problem is that FURTHER Person fields do not have an Alias.
+     So if it translates to a Non-Person Fields at the Target,
+     We need to provide the target alias in the translated XML. 
+     In the XML, we need to get from fieldName to targetAlias.fieldName :)
+  (: For example, FURTHER.PERSON.VITAL_STATUS trans to OMOPv2.OBSERVATION_PERIOD.PERSON_STATUS_CONCEPT_ID :)
+  (: We're not using this field for now, but would be nice to have this functionality in place :)
+  
+  (: We always want a new alias for these criteria,
+     because each join requires a unique alias if 
+     there are multiple joins to the same table,
+     such as OpenMRS.personAttribute is overloaded with different
+     types of values :)
+     
+  for $p at $i in $inputCopy2//fq:parameter[@attrAlias]
+  let $key := substring-before($p/@attrAlias,$fqt:DELIMITER)
+  let $val := substring-after($p/@attrAlias,$fqt:DELIMITER)
+  return
+  (: Insert into the First <query> parent, 
+     therefore, 
+     if the parameter is in a sub <query>,
+     it will only insert into the <aliases> node within the same <query>, 
+     without affecting outter <query> nodes!
+     This is using the FIRST[1] ancestor XPath.
+  :)
+  if ($key and $val) then
+	  insert node
+	    <alias>
+			  <key>{$key}</key>
+				<value>{$val}</value>
+			</alias>
+	    into $p/ancestor::fq:query[1]//fq:aliases
+  else()
+
+) (: End Modify :)
+return $inputCopy2
 
 (: END Function :)
 };
@@ -997,7 +1113,7 @@ modify (
       insert node
         <error xmlns="http://further.utah.edu/core/ws">
           <code>QUERY_TRANSLATION_ERROR</code>
-          <message>Criteria [ {$tgNmspcName}.{$attrName} ] NOT Tranlated</message>
+          <message>Criteria [ {$fqt:FURTHeR}.{$attrName} ] NOT Tranlated</message>
         </error>
         into $inputCopy 
   )
@@ -1013,7 +1129,7 @@ modify (
       insert node
         <error xmlns="http://further.utah.edu/core/ws">
           <code>MDR_QUERY_TRANSLATION_ERROR</code>
-          <message>MDR Association for [ {$tgNmspcName}.{$attrName} ] May be Missing</message>
+          <message>MDR Association for [ {$fqt:FURTHeR}.{$attrName} ] May be Missing</message>
         </error>
         into $inputCopy 
   )
@@ -1094,7 +1210,8 @@ modify (
 
     (: Delete ALL aliasKey Attributes on SUCCESS :)
     delete node $inputCopy//@aliasKey,
-    delete node $inputCopy//@oldAliasKey
+    delete node $inputCopy//@oldAliasKey,
+    delete node $inputCopy//@attrAlias
 
     ,(: Do more stuff :)
 
@@ -1296,7 +1413,20 @@ modify (
         )
 
 ) (: End Modify :)
-return $inputCopy
+return
+
+(: BEGIN Second XQUERY TRANSFORMATION for Field Aliases :)
+copy $inputCopy2 := $inputCopy
+modify (
+  
+  (: For Each Field Alias :)
+  for $p in $inputCopy2//fq:parameter[@attrAlias]
+  let $key := fn:substring-before($p/@attrAlias,$fqt:DELIMITER)
+  return
+    replace value of node $p with fn:concat($key,'.',$p)
+
+) (: End Modify :)
+return $inputCopy2
 
 (: END Function :)
 };
@@ -1421,7 +1551,9 @@ return $inputCopy
 (:==================================================================:)
 (: preTransOMOP                                                     :)
 (: Pre-Translate ICD-9 Codes into SNOMED for OMOP Target ONLY!      :)
-(: Since DTS Maps from ICD-9 to SNOMED to OMOP                      :)
+(: Since DTS Maps from ICD-9 to SNOMED, then to OMOP                :)
+(: In the ideal world, if ICD-9 mapped to OMOP Directly             :)
+(: we would not need this custom special function.                  :)
 (:==================================================================:)
 declare function fqt:preTransOMOP($inputXML as document-node(),
                                   $targetNamespaceId as xs:string)
@@ -1573,5 +1705,33 @@ as xs:string
   return $attrName
 
 }; (: END OF FUNCTION fqt:getAttrNameFromCriteria :)
+
+
+(:=====================================================================:)
+(: transMoreCriteria                                                   :)
+(: Add More Criteria if Any                                            :)
+(:=====================================================================:)
+declare function fqt:transMoreCriteria($inputXML as document-node()) 
+as document-node()
+{
+
+(: BEGIN Transformation :)
+copy $inputCopy := $inputXML
+modify (
+
+  for $c in $inputCopy//fq:criteria[@moreCriteria]
+    (: Convert Property String into a Node, Awesome! :)
+    let $propVal := fn:parse-xml($c/@moreCriteria)
+    return (
+      (: Insert into the PARENT Node! :)
+      insert node $propVal into $c/..
+      , (: Cleanup the XML Attribute :)
+      delete node $c/@moreCriteria
+    )
+  
+) (: End Modify :)
+return $inputCopy
+
+}; (: END OF FUNCTION fqt:transMoreCriteria :)
 
 (: END OF MODULE :)

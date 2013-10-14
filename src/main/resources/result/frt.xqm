@@ -109,8 +109,8 @@ declare function frt:transResult($inputXML as document-node(),
   (: Initialize Empty Person Template with MDR Properties :)
   let $mdrPerson := frt:initPersonTemplate($emptyPerson,$extNmspcName)
   
-  return   (:  $mdrPerson :)
-
+  return (: $mdrPerson :)
+  
     (: Validate Initialized Template :)
     if ($mdrPerson/*[@extRootObject=$frt:ERROR]) then
 
@@ -131,7 +131,7 @@ declare function frt:transResult($inputXML as document-node(),
 
 		  (: Return Final Cleaned Version :)
 		  return $cleaned
-  
+
 };
 
 
@@ -347,10 +347,14 @@ modify (
       else if (fn:empty($extValue) or $extValue=$frt:EMPTY) then
         (: if no value, Mark to Skip :)
         replace value of node $field/@extPath with $frt:SKIP
-      else
+      else (
         (: Set Value for everything else :)
         replace value of node $field with $extValue
-    )
+        ,
+        insert node attribute sourceAttrText {fn:name($extValue)} into $field
+      )
+      
+    ) (: End Return :)
 
 ) (: End Modify :)
 return 
@@ -387,17 +391,16 @@ modify (
     (: replace value of node $field with 
          fn:concat($extNmspcId,'^',$frt:LocalCode,'^',$dtsSrcPropVal,'^',$tgTerm,'^',$frt:CodeInSource) :)
     (: replace value of node $field with  $dtsURL :)
-
+ 
       if ($translatedPropVal) then (
         replace value of node $field with $translatedPropVal
         ,
         replace value of node $field/@dtsFlag with $frt:YES
       )
-      else 
+      else
         (: Always return Error if there is no DTS Mapping :)
         replace value of node $field/@dtsFlag with $frt:ERROR
 
-     
 ) (: End Modify :)
 return 
 
@@ -443,7 +446,9 @@ modify (
 
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
     for $field in ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR])[1]
-    let $attrName := fn:name($field)
+    (: let $attrName := fn:name($field) :)
+    (: Use the Source Attribute Name instead :)
+    let $attrName := fn:data($field/@sourceAttrText)
       return
       replace node $inputCopy/*
          with
@@ -497,7 +502,8 @@ modify (
   delete node $inputCopy1/ResultList//@centralRootObject,
   delete node $inputCopy1/ResultList//@extPath,
   delete node $inputCopy1/ResultList//@dtsTerm,
-  delete node $inputCopy1/ResultList//@dtsFlag
+  delete node $inputCopy1/ResultList//@dtsFlag,
+  delete node $inputCopy1/ResultList//@sourceAttrText
   
 ) (: End Modify :)
 return

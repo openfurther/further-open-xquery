@@ -419,10 +419,12 @@ modify (
                    ,
                    replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:YES
                  )
-                 else 
+                 else (
                    (: Always return Error if there is no DTS Mapping :)
-                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR
-                   
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR,
+                   (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
+                   insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[3]
+                 )
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
@@ -548,23 +550,27 @@ modify (
                let $translatedPropVal3 := further:getConceptPropertyValue($dtsResponse3)
                
                return (
-                 
+
                  if ($translatedPropVal2) then (
-                   replace value of node $c/fq:parameters/fq:parameter[2]
-                      with $translatedPropVal2,
+                   replace value of node $c/fq:parameters/fq:parameter[2] with $translatedPropVal2,
                    replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
                  )
-                 else (: ERROR :)
-                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR
+                 else (
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR,
+                   (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
+                   insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[2]
+                 )
                  ,
   
                  if ($translatedPropVal3) then (
-                   replace value of node $c/fq:parameters/fq:parameter[3]
-                      with $translatedPropVal3,
+                   replace value of node $c/fq:parameters/fq:parameter[3] with $translatedPropVal3,
                    replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:YES
                  )
-                 else (: ERROR :)
-                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR
+                 else (
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR,
+                   (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
+                   insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[3]
+                 )
   
                ) (: End Replace Return :)
                
@@ -704,8 +710,11 @@ modify (
                    ,
                    replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
                  )
-                 else replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR
-                 
+                 else (
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR,
+                   (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
+                   insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[2]
+                 )
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
@@ -827,8 +836,12 @@ modify (
                          ,
                          replace value of node $parm/@dtsFlag with $fqt:YES
                        )
-                       else replace value of node $parm/@dtsFlag with $fqt:ERROR
-           
+                       else (
+                         replace value of node $parm/@dtsFlag with $fqt:ERROR,
+                         (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
+                         insert node attribute sourceAttrText {$sourceAttrText} into $parm
+                       )
+                       
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
@@ -1139,13 +1152,17 @@ modify (
     (: So I'm just deleting the whole file and then inserting the Error :)
     delete node $inputCopy//fq:query,
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
-    for $c in ($inputCopy//fq:criteria[fq:parameters/fq:parameter/@dtsFlag=$fqt:ERROR])[1]
-      let $attrName := fqt:getAttrNameFromCriteria($c)
+    (: Since the dtsFlag is at the parameter level, we can just search through the parameters, instead of criteria :)
+    for $p in ($inputCopy//fq:criteria/fq:parameters/fq:parameter[@dtsFlag=$fqt:ERROR])[1]
+    (: for $c in ($inputCopy//fq:criteria[fq:parameters/fq:parameter/@dtsFlag=$fqt:ERROR])[1] :)
+      (: let $attrName := fqt:getAttrNameFromCriteria($c) :)
+      (: Get the Source Attribute Name instead :)
+      let $attrName := fn:data($p/@sourceAttrText)
       return
       insert node
         <error xmlns="http://further.utah.edu/core/ws">
           <code>DTS_QUERY_TRANSLATION_ERROR</code>
-          <message>DTS Mapping for [ {$tgNmspcName}.{$attrName} ] May be Missing</message>
+          <message>DTS Mapping for [ {$fqt:FURTHeR}.{$attrName} ] May be Missing</message>
         </error>
         into $inputCopy
   )

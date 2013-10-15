@@ -18,5 +18,5 @@
 -->
 <error xmlns="http://further.utah.edu/core/ws">
   <code>MDR_QUERY_TRANSLATION_ERROR</code>
-  <message>MDR Association for [ OMOP-V2.vitalStatus ] May be Missing</message>
+  <message>MDR Association for [ FURTHER.vitalStatus ] May be Missing</message>
 </error>

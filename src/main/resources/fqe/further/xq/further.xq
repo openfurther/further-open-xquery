@@ -32,7 +32,13 @@ declare function further:getConceptTranslationRestUrl(
 {
   (: EXAMPLE: http://dev-esb.further.utah.edu:9000/dts/rest/translate/UUEDW/DWID/106386/SNOMED CT/Code in Source?view=HUMAN :)
   (:          http://dev-esb.further.utah.edu:9000/dts/rest/translate/{namespace}/{propertyName}/{propertyValue}/{targetNamespace}/{targetPropertyName}?view={view} :)
-  let $srcPropertyVal := if (fn:string-length( $srcPropVal ) = 0) then '0' else $srcPropVal
+  (: Sometimes we have values that contain special characters, such as a % for unitOfMeasure.
+     Therefore, we need to escape these special characters with the encode-for-uri function. 
+     The call to iri-to-uri function does not espace these special characters.
+     And the reason why we do not simply replace iri-to-uri with encode-for-uri is because
+     the encode-for-uri function escapes special characters such as : and / 
+     which are valid parts of a http://url that we DO NOT want to escape. :)
+  let $srcPropertyVal := if (fn:string-length( $srcPropVal ) = 0) then '0' else fn:encode-for-uri($srcPropVal)
   let $fixedSrcNamespace := further:replaceBracketsWithHexCodes( $srcNmspc )
   let $fixedTgNamespace := further:replaceBracketsWithHexCodes( $tgNmspc )
   let $docUrl := fn:concat($const:restServer, $const:dtsRestService, '/', $fixedSrcNamespace, '/', $srcPropNm, '/', $srcPropertyVal, '/', $fixedTgNamespace, '/', $tgPropNm, '?view=HUMAN')

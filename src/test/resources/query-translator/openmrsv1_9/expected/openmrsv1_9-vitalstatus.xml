@@ -16,7 +16,18 @@
     limitations under the License.
 
 -->
-<error xmlns="http://further.utah.edu/core/ws">
-  <code>MDR_QUERY_TRANSLATION_ERROR</code>
-  <message>MDR Association for [ FURTHER.obs1.observation ] May be Missing</message>
-</error>
+<query xmlns="http://further.utah.edu/core/query" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" rootObject="Person">
+  <rootCriterion>
+    <searchType>CONJUNCTION</searchType>
+    <criteria>
+      <searchType>SIMPLE</searchType>
+      <parameters>
+        <parameter xsi:type="RelationType">EQ</parameter>
+        <parameter xsi:type="xs:string">dead</parameter>
+        <parameter xsi:type="xs:byte">1</parameter>
+      </parameters>
+    </criteria>
+  </rootCriterion>
+  <sortCriteria/>
+  <aliases/>
+</query>

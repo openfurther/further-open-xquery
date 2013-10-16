@@ -13,16 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.utah.further.ds.omop.v2
+package edu.utah.further.ds.openmrs.v1_9
 
-import org.custommonkey.xmlunit.DetailedDiff
 import org.custommonkey.xmlunit.Diff
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.test.context.ContextConfiguration
 
 import spock.lang.Unroll
-import edu.utah.further.core.test.xml.IgnoreNamedElementsDifferenceListener
 import edu.utah.further.core.xml.xquery.XQueryService
 import edu.utah.further.ds.test.translations.TranslationTest
 import groovy.util.logging.Slf4j
@@ -39,49 +37,46 @@ import groovy.util.logging.Slf4j
  * -----------------------------------------------------------------------------------
  *
  * @author N. Dustin Schultz {@code <dustin.schultz@utah.edu>}
- * @version Sep 16, 2013
+ * @version Oct 8, 2013
  */
 @ContextConfiguration(locations = [
 	"/META-INF/ds/test/ds-test-mdr-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-dts-ws-server-context.xml",
-	"/META-INF/ds/test/ds-test-fqe-mpi-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-xquery-context.xml",
 	"/open-xquery-test-context.xml",
 ])
 @Slf4j
-class ITestSpecDsOmopV2ResultTranslator extends TranslationTest {
+class ITestSpecDsOpenMRSV1_9QueryTranslator extends TranslationTest
+{
 	@Autowired
 	XQueryService xQueryService
 
-	@Value('${server.mdr.ws}${path.mdr.ws.resource.path}/result/frtCall.xq')
+	@Value('${server.mdr.ws}${path.mdr.ws.resource.path}/query/fqtCall.xq')
 	def url;
 
 	@Unroll
-	def "Testing OMOPv2 Result Translations: #name"() {
+	def "Testing OpenMRSv1.9 Query Translations: #name"() {
 		given:
 		def xQuery = url.toURL().text
+		
 
-		def parameters = ["srcNmspcId" : "32868", "dataSetId" : "1234"]
-		def output = xQueryService.executeIntoString(
-				new ByteArrayInputStream(xQuery.bytes), result, parameters)
-
+		def parameters = ["tgNmspcId" : "32812", "tgNmspcName" : "OpenMRS-V1_9"]
+		def result = xQueryService.executeIntoString(
+				new ByteArrayInputStream(xQuery.bytes), query, parameters)
+		
 		//no if debug is enabled jazz cuz groovy is cool like that (it does it for you)!
 		log.debug("++++++++++++++++++++++++++++++++++++++++")
-		log.debug(output)
+		log.debug(result)
 		log.debug("++++++++++++++++++++++++++++++++++++++++")
-
+		
 		expect:
-		def diff = new DetailedDiff(new Diff(output, expected.text))
-		diff.overrideDifferenceListener(new IgnoreNamedElementsDifferenceListener(["id", "compositeId"]))
-		diff.similar()
-
-		result.close()
+		new Diff(result, expected.text).similar()
+		query.close()
 		expected.close()
 
-
 		where:
-		result << queryFiles('/result-translator/omopv2/input/*').values()
-		expected << queryFiles('/result-translator/omopv2/expected/*').values();
-		name << queryFiles('/result-translator/omopv2/input/*').keySet()
+		query << queryFiles('/query-translator/input/*').values()
+		expected << queryFiles('/query-translator/openmrsv1_9/expected/*').values()
+		name << queryFiles('/query-translator/openmrsv1_9/expected/*').keySet()
 	}
 }

@@ -17,6 +17,6 @@
 
 -->
 <error xmlns="http://further.utah.edu/core/ws">
-  <code>MDR_QUERY_TRANSLATION_ERROR</code>
-  <message>MDR Association for [ FURTHER.obs1.observation ] May be Missing</message>
+	<code>DTS_QUERY_TRANSLATION_ERROR</code>
+	<message>DTS Mapping for [ FURTHER.Observation1.observation ] May be Missing</message>
 </error>

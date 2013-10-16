@@ -17,7 +17,38 @@
 	<url>http://further.utah.edu</url>
 
 	<dependencies>
-	
+
+		<!-- BaseX -->
+		<dependency>
+			<groupId>org.basex</groupId>
+			<artifactId>basex</artifactId>
+			<version>${basex.version}</version>
+			<optional>true</optional>
+		</dependency>
+
+		<!-- BaseX API, includes basex-xqj dep -->
+		<dependency>
+			<groupId>org.basex</groupId>
+			<artifactId>basex-api</artifactId>
+			<version>${basex.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-nop</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>com.ettrema</groupId>
+					<artifactId>milton-api</artifactId>
+				</exclusion>
+			</exclusions>
+			<optional>true</optional>
+		</dependency>
+
+		<dependency>
+			<groupId>edu.utah.further.core</groupId>
+			<artifactId>core-test</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>edu.utah.further.ds</groupId>
 			<artifactId>ds-test</artifactId>
@@ -38,15 +69,15 @@
 			<artifactId>xmlunit</artifactId>
 			<version>${xmlunit.version}</version>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.hsqldb</groupId>
 			<artifactId>hsqldb</artifactId>
 			<version>${hsqldb.version}</version>
 		</dependency>
-		
+
 	</dependencies>
-	
+
 	<build>
 		<plugins>
 			<!-- ############################ -->
@@ -77,7 +108,7 @@
 						<exclude>**/STest*.java</exclude>
 					</excludes>
 				</configuration>
-				</plugin>
+			</plugin>
 		</plugins>
 	</build>
 

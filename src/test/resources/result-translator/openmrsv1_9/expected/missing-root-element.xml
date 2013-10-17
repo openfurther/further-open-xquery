@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <error xmlns="http://further.utah.edu/core/ws">
-  <code>INVALID_RESULTLIST_ERROR</code>
-  <message>Invalid ResultList for Namespace [ OMOP-V2 ] </message>
+	<code>INVALID_RESULTLIST_ERROR</code>
+	<message>Invalid ResultList for Namespace [ OpenMRS-V1_9 ] </message>
 </error>

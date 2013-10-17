@@ -69,6 +69,7 @@ class ITestSpecDsOpenMRSV1_9ResultTranslator extends TranslationTest
 
 		//no if debug is enabled jazz cuz groovy is cool like that (it does it for you)!
 		log.debug("++++++++++++++++++++++++++++++++++++++++")
+		log.debug(name);
 		log.debug(output)
 		log.debug("++++++++++++++++++++++++++++++++++++++++")
 

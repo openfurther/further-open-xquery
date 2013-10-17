@@ -3,13 +3,16 @@
 	<Person>
 		<id>
 			<datasetId>1234</datasetId>
-			<id>1</id>
+			<id>0</id>
 		</id>
-		<compositeId>1234:1</compositeId>
+		<compositeId>1234:0</compositeId>
 		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
-		<administrativeGender>248152002</administrativeGender>
-		<raceNamespaceId>30</raceNamespaceId>
-		<race>413773004</race>
-		<birthYear>1960</birthYear>
+		<administrativeGender>248153007</administrativeGender>
+		<dateOfBirth>1962-04-21</dateOfBirth>
+		<birthYear>1962</birthYear>
+		<vitalStatusNamespaceId>30</vitalStatusNamespaceId>
+		<vitalStatus>371827001</vitalStatus>
+		<causeOfDeathNamespaceId>30</causeOfDeathNamespaceId>
+		<causeOfDeath>371827001</causeOfDeath>
 	</Person>
 </ResultList>

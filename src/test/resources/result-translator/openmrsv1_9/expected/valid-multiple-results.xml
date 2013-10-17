@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ResultList>
+	<Person>
+		<id>
+			<datasetId>1234</datasetId>
+			<id>0</id>
+		</id>
+		<compositeId>1234:0</compositeId>
+		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
+		<administrativeGender>248153007</administrativeGender>
+		<dateOfBirth>1962-04-21</dateOfBirth>
+		<birthYear>1962</birthYear>
+		<vitalStatusNamespaceId>30</vitalStatusNamespaceId>
+		<vitalStatus>371827001</vitalStatus>
+		<causeOfDeathNamespaceId>30</causeOfDeathNamespaceId>
+		<causeOfDeath>371827001</causeOfDeath>
+	</Person>
+	<Person>
+		<id>
+			<datasetId>1234</datasetId>
+			<id>1</id>
+		</id>
+		<compositeId>1234:1</compositeId>
+		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
+		<administrativeGender>248152002</administrativeGender>
+		<dateOfBirth>1974-11-02</dateOfBirth>
+		<birthYear>1974</birthYear>
+		<vitalStatusNamespaceId>30</vitalStatusNamespaceId>
+		<vitalStatus>419099009</vitalStatus>
+	</Person>
+</ResultList>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<error xmlns="http://further.utah.edu/core/ws">
+	<code>DTS_RESULT_TRANSLATION_ERROR</code>
+	<message>DTS Mapping for [ OpenMRS-V1_9.gender ] May be Missing
+	</message>
+</error>

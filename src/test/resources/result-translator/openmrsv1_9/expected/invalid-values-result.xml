@@ -1,0 +1,4 @@
+<error xmlns="http://further.utah.edu/core/ws">
+ <code>DTS_RESULT_TRANSLATION_ERROR</code>
+ <message>DTS Mapping for [ OMOP-V2.administrativeGender ] May be Missing</message>
+</error>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ResultList>
+	<Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<personId>6</personId>
+		<birthdate>1962-04-21</birthdate>
+		<junk>blah</junk>
+		<birthdateEstimated>0</birthdateEstimated>
+		<causeOfDeath>0</causeOfDeath>
+		<creator>1</creator>
+		<dateCreated>2006-01-18</dateCreated>
+		<dead>0</dead>
+		<gender>M</gender>
+		<sweet>awesome</sweet>
+		<uuid>dd55352f-1691-11df-97a5-7038c432aabf</uuid>
+		<voided>0</voided>
+		<birthYear>1962</birthYear>
+		<personAttributes>
+			<personAttribute>
+				<personAttributeId>15865</personAttributeId>
+				<creator>1</creator>
+				<uuid>388a4129-4f49-4fe6-8e40-32fe83b60c73</uuid>
+				<value>Asian or Pacific islander</value>
+				<voided>0</voided>
+				<sweet>awesome</sweet>
+				<personAttributeType>1</personAttributeType>
+			</personAttribute>
+			<personAttribute>
+				<personAttributeId>21151</personAttributeId>
+				<creator>1</creator>
+				<uuid>ddb35c80-a14e-4fbe-8508-10f343f642c0</uuid>
+				<value>Buddhist</value>
+				<voided>0</voided>
+				<personAttributeType>11</personAttributeType>
+			</personAttribute>
+			<personAttribute>
+				<personAttributeId>10579</personAttributeId>
+				<creator>1</creator>
+				<uuid>7e22b3cd-9906-4dc6-aa42-a090c881fd69</uuid>
+				<value>French</value>
+				<voided>0</voided>
+				<personAttributeType>9</personAttributeType>
+			</personAttribute>
+			<personAttribute>
+				<personAttributeId>5293</personAttributeId>
+				<creator>1</creator>
+				<uuid>6c11f477-6730-4d4c-b09d-e18915348570</uuid>
+				<value>NOT MARRIED</value>
+				<junk>blah</junk>
+				<voided>0</voided>
+				<personAttributeType>5</personAttributeType>
+			</personAttribute>
+		</personAttributes>
+	</Person>
+</ResultList>

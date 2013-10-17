@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ResultList>
+	<Person>
+		<id>
+			<datasetId>1234</datasetId>
+			<id>1</id>
+		</id>
+		<compositeId>1234:1</compositeId>
+		<administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
+		<administrativeGender>248152002</administrativeGender>
+		<raceNamespaceId>30</raceNamespaceId>
+		<race>413773004</race>
+		<birthYear>1960</birthYear>
+	</Person>
+</ResultList>

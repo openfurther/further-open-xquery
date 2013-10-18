@@ -42,7 +42,6 @@ import groovy.util.logging.Slf4j
  * @version Oct 8, 2013
  */
 @ContextConfiguration(locations = [
-	"/META-INF/ds/test/ds-test-mdr-ws-client-context.xml",
 	"/META-INF/ds/test/ds-test-mdr-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-dts-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-fqe-mpi-ws-server-context.xml",

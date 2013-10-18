@@ -16,7 +16,23 @@
     limitations under the License.
 
 -->
-<error xmlns="http://further.utah.edu/core/ws">
-  <code>DTS_QUERY_TRANSLATION_ERROR</code>
-  <message>DTS Mapping for [ OpenMRS-V1_9.Order.orderTypeId ] May be Missing</message>
-</error>
+<query rootObject="Person" xmlns="http://further.utah.edu/core/query" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<rootCriterion>
+		<searchType>CONJUNCTION</searchType>
+		<criteria>
+			<searchType>SIMPLE</searchType>
+			<parameters>
+				<parameter xsi:type="RelationType">EQ</parameter>
+				<parameter xsi:type="xs:string">ord11.conceptId</parameter>
+				<parameter xsi:type="xs:int">74266</parameter>
+			</parameters>
+		</criteria>
+	</rootCriterion>
+	<sortCriteria/>
+	<aliases>
+		<alias associationObject="Order">
+			<key>ord11</key>
+			<value>observations.order</value>
+		</alias>
+	</aliases>
+</query>

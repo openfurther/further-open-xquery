@@ -66,6 +66,12 @@ class ITestSpecDsOmopV2QueryTranslator extends TranslationTest {
 		def result = xQueryService.executeIntoString(
 				new ByteArrayInputStream(xQuery.bytes), query, parameters)
 		
+		//no if debug is enabled jazz cuz groovy is cool like that (it does it for you)!
+		log.debug("++++++++++++++++++++++++++++++++++++++++")
+		log.debug(name);
+		log.debug(result)
+		log.debug("++++++++++++++++++++++++++++++++++++++++")
+		
 		expect:
 		new Diff(result, expected.text).similar()
 		query.close()

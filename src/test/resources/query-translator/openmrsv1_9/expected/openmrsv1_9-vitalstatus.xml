@@ -24,7 +24,7 @@
       <parameters>
         <parameter xsi:type="RelationType">EQ</parameter>
         <parameter xsi:type="xs:string">dead</parameter>
-        <parameter xsi:type="xs:byte">1</parameter>
+        <parameter xsi:type="xs:boolean">1</parameter>
       </parameters>
     </criteria>
   </rootCriterion>

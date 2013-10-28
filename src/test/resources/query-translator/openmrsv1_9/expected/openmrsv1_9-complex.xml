@@ -34,7 +34,7 @@
         <parameters>
           <parameter xsi:type="RelationType">EQ</parameter>
           <parameter xsi:type="xs:string">obs21.conceptId</parameter>
-          <parameter xsi:type="xs:int">134887</parameter>
+          <parameter xsi:type="xs:long">134887</parameter>
         </parameters>
       </criteria>
       <criteria>
@@ -50,7 +50,7 @@
               <parameters>
                 <parameter xsi:type="RelationType">EQ</parameter>
                 <parameter xsi:type="xs:string">obs11.conceptId</parameter>
-                <parameter xsi:type="xs:int">500139</parameter>
+                <parameter xsi:type="xs:long">500139</parameter>
               </parameters>
             </criteria>
           </rootCriterion>

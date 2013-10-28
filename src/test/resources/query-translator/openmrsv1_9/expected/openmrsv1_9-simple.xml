@@ -24,7 +24,7 @@
       <parameters>
         <parameter xsi:type="RelationType">EQ</parameter>
         <parameter xsi:type="xs:string">gender</parameter>
-        <parameter xsi:type="xs:int">M</parameter>
+        <parameter xsi:type="xs:string">M</parameter>
       </parameters>
     </criteria>
   </rootCriterion>

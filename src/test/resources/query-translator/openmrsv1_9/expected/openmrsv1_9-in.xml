@@ -23,9 +23,9 @@
       <searchType>IN</searchType>
       <parameters>
         <parameter xsi:type="xs:string">obs11.conceptId</parameter>
-        <parameter xsi:type="xs:int">500094</parameter>
-        <parameter xsi:type="xs:int">500124</parameter>
-        <parameter xsi:type="xs:int">500126</parameter>
+        <parameter xsi:type="xs:long">500094</parameter>
+        <parameter xsi:type="xs:long">500124</parameter>
+        <parameter xsi:type="xs:long">500126</parameter>
       </parameters>
     </criteria>
   </rootCriterion>

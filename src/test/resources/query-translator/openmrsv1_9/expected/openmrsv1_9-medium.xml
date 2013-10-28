@@ -24,7 +24,7 @@
       <parameters>
         <parameter xsi:type="RelationType">GT</parameter>
         <parameter xsi:type="xs:string">birthYear</parameter>
-        <parameter xsi:type="xs:int">1960</parameter>
+        <parameter xsi:type="xs:long">1960</parameter>
       </parameters>
     </criteria>
     <criteria>
@@ -44,8 +44,8 @@
         <searchType>IN</searchType>
         <parameters>
           <parameter xsi:type="xs:string">obs11.conceptId</parameter>
-          <parameter xsi:type="xs:int">133335</parameter>
-          <parameter xsi:type="xs:int">147752</parameter>
+          <parameter xsi:type="xs:long">133335</parameter>
+          <parameter xsi:type="xs:long">147752</parameter>
         </parameters>
       </criteria>
     </criteria>

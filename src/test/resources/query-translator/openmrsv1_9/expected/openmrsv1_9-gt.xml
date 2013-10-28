@@ -22,7 +22,7 @@
     <parameters>
       <parameter xsi:type="RelationType">GT</parameter>
       <parameter xsi:type="xs:string">birthYear</parameter>
-      <parameter xsi:type="xs:int">1983</parameter>
+      <parameter xsi:type="xs:long">1983</parameter>
     </parameters>
   </rootCriterion>
   <sortCriteria/>

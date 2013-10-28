@@ -27,10 +27,10 @@
           <searchType>IN</searchType>
           <parameters>
             <parameter xsi:type="xs:string">obs11.conceptId</parameter>
-            <parameter xsi:type="xs:int">500056</parameter>
-            <parameter xsi:type="xs:int">133298</parameter>
-            <parameter xsi:type="xs:int">133288</parameter>
-            <parameter xsi:type="xs:int">500057</parameter>
+            <parameter xsi:type="xs:long">500056</parameter>
+            <parameter xsi:type="xs:long">133298</parameter>
+            <parameter xsi:type="xs:long">133288</parameter>
+            <parameter xsi:type="xs:long">500057</parameter>
           </parameters>
         </criteria>
       </criteria>
@@ -40,11 +40,11 @@
           <searchType>IN</searchType>
           <parameters>
             <parameter xsi:type="xs:string">obs11.conceptId</parameter>
-            <parameter xsi:type="xs:int">133267</parameter>
-            <parameter xsi:type="xs:int">500054</parameter>
-            <parameter xsi:type="xs:int">133265</parameter>
-            <parameter xsi:type="xs:int">133228</parameter>
-            <parameter xsi:type="xs:int">133268</parameter>
+            <parameter xsi:type="xs:long">133267</parameter>
+            <parameter xsi:type="xs:long">500054</parameter>
+            <parameter xsi:type="xs:long">133265</parameter>
+            <parameter xsi:type="xs:long">133228</parameter>
+            <parameter xsi:type="xs:long">133268</parameter>
           </parameters>
         </criteria>
       </criteria>
@@ -54,11 +54,11 @@
           <searchType>IN</searchType>
           <parameters>
             <parameter xsi:type="xs:string">obs11.conceptId</parameter>
-            <parameter xsi:type="xs:int">133238</parameter>
-            <parameter xsi:type="xs:int">133299</parameter>
-            <parameter xsi:type="xs:int">133240</parameter>
-            <parameter xsi:type="xs:int">133288</parameter>
-            <parameter xsi:type="xs:int">133261</parameter>
+            <parameter xsi:type="xs:long">133238</parameter>
+            <parameter xsi:type="xs:long">133299</parameter>
+            <parameter xsi:type="xs:long">133240</parameter>
+            <parameter xsi:type="xs:long">133288</parameter>
+            <parameter xsi:type="xs:long">133261</parameter>
           </parameters>
         </criteria>
       </criteria>
@@ -67,8 +67,8 @@
       <searchType>BETWEEN</searchType>
       <parameters>
         <parameter xsi:type="xs:string">birthYear</parameter>
-        <parameter xsi:type="xs:int">1979</parameter>
-        <parameter xsi:type="xs:int">1995</parameter>
+        <parameter xsi:type="xs:long">1979</parameter>
+        <parameter xsi:type="xs:long">1995</parameter>
       </parameters>
     </criteria>
     <criteria>

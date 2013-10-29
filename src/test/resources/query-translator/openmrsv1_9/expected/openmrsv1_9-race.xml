@@ -23,7 +23,7 @@
       <searchType>SIMPLE</searchType>
       <parameters>
         <parameter xsi:type="RelationType">EQ</parameter>
-        <parameter xsi:type="xs:string">pa_1.value</parameter>
+        <parameter xsi:type="xs:string">pa.value</parameter>
         <parameter xsi:type="xs:string">Caucasian</parameter>
       </parameters>
     </criteria>
@@ -31,7 +31,7 @@
       <searchType>SIMPLE</searchType>
       <parameters>
         <parameter xsi:type="RelationType">EQ</parameter>
-        <parameter xsi:type="xs:string">pa_1.personAttributeType</parameter>
+        <parameter xsi:type="xs:string">pa.personAttributeType</parameter>
         <parameter xsi:type="xs:integer">1</parameter>
       </parameters>
     </criteria>
@@ -39,7 +39,7 @@
   <sortCriteria/>
   <aliases>
     <alias>
-      <key>pa_1</key>
+      <key>pa</key>
       <value>personAttributes</value>
     </alias>
   </aliases>

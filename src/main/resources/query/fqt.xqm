@@ -79,11 +79,13 @@ declare variable $fqt:ATTR_VALUE_TRANS_FUNC as xs:string := 'ATTR_VALUE_TRANS_FU
 declare variable $fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE as xs:string := 'ATTR_VALUE_TRANS_TO_DATA_TYPE';
 declare variable $fqt:MORE_CRITERIA as xs:string := 'MORE_CRITERIA';
 declare variable $fqt:ATTR_ALIAS as xs:string := 'ATTR_ALIAS';
+declare variable $fqt:EXTRA_ALIAS as xs:string := 'EXTRA_ALIAS';
 
 declare variable $fqt:skipATTR as xs:string := 'skipAttr';
 declare variable $fqt:translateCode as xs:string := 'translateCode';
 declare variable $fqt:ageToBirthYear as xs:string := 'ageToBirthYear';
 declare variable $fqt:devNull as xs:string := 'devNull';
+declare variable $fqt:ReplaceMe as xs:string := 'ReplaceMe';
 
 (: DTS Static Property Names CASE SENSITIVE! :)
 declare variable $fqt:dtsSrcPropNm as xs:string := 'Code in Source';
@@ -111,7 +113,7 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   (: Call insertObsType :)
   let $obsTypeInput := fqt:insertObsType($initializedInput)
   
-  (: Call preTransOMOP :)
+  (: Call preTransOMOP Special Case :)
   let $preTranslatedOMOP := fqt:preTransOMOP($obsTypeInput,$targetNamespaceId)
   
   (: Call transCriteriaPhrase :)
@@ -120,11 +122,8 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   (: Call transSingleCriteria :)
   let $translatedSingleCriteria := fqt:transSingleCriteria($translatedCriteriaPhrase,$targetNamespaceId)
 
-  (: Call transMoreCriteria :)
-  let $translatedMoreCriteria := fqt:transMoreCriteria($translatedSingleCriteria)
-
   (: Call transAlias :)
-  let $translatedAlias := fqt:transAlias($translatedMoreCriteria,$targetNamespaceId)
+  let $translatedAlias := fqt:transAlias($translatedSingleCriteria,$targetNamespaceId)
 
   (: Call updatedParmAlias :)
   let $updatedParmAlias := fqt:updateParmAlias($translatedAlias)
@@ -135,8 +134,11 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   (: Call dedupAliases :)
   let $dedupedAliases := fqt:dedupAliases($translatedRoot)
   
+  (: Call transMoreCriteria AFTER Translations are Completed Above! :)
+  let $translatedMoreCriteria := fqt:transMoreCriteria($dedupedAliases)
+  
   (: Call validate for Errors :)
-  let $validated := fqt:validate($dedupedAliases,$tgNmspcName)
+  let $validated := fqt:validate($translatedMoreCriteria,$tgNmspcName)
   
   (: Call cleanup :)
   let $cleaned := fqt:cleanup($validated)
@@ -366,6 +368,13 @@ modify (
                      (: Get the Alias into an XML Attribute for later processing,
                         We will process this XML Attribute alias in the transAlias Function :)
                      return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[2]
+                     
+                   , (: Check for Extra Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:EXTRA_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute extraAlias {$propVal} into $c/fq:parameters/fq:parameter[2]
 
                  )                   
              else (
@@ -503,6 +512,13 @@ modify (
                      (: Get the Alias into an XML Attribute for later processing,
                         We will process this XML Attribute alias in the transAlias Function :)
                      return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
+                     
+                   , (: Check for Extra Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:EXTRA_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute extraAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
 
                  )
              else (
@@ -662,6 +678,13 @@ modify (
                      (: Get the Alias into an XML Attribute for later processing,
                         We will process this XML Attribute alias in the transAlias Function :)
                      return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
+                     
+                   , (: Check for Extra Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:EXTRA_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute extraAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
 
                  )
              else (
@@ -792,6 +815,13 @@ modify (
                      (: Get the Alias into an XML Attribute for later processing,
                         We will process this XML Attribute alias in the transAlias Function :)
                      return insert node attribute attrAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
+
+                   , (: Check for Extra Aliases for Fields :)
+                   for $entry in $mdrResult/properties/entry[key=$fqt:EXTRA_ALIAS]
+                     let $propVal := $entry/value
+                     (: Get the Alias into an XML Attribute for later processing,
+                        We will process this XML Attribute alias in the transAlias Function :)
+                     return insert node attribute extraAlias {$propVal} into $c/fq:parameters/fq:parameter[1]
 
                  )
              else (
@@ -1003,7 +1033,56 @@ modify (
   else()
 
 ) (: End Modify :)
-return $inputCopy2
+return
+
+(: BEGIN Third XQUERY TRANSFORMATION :)
+copy $inputCopy3 := $inputCopy2
+modify (
+  
+  (: Add Alias for Special Cases :)
+  (: Use Case 1 = Sometimes we have an alias that translates to multiple aliases due to hierarchy relationship levels :)
+  (: This EXCLUDES Observation Types Issues.
+     For example, FURTHER.Order table translates to OpenMRS.Observation.Order table.
+     Therefore, we need another alias to support the SubLevel.
+     We need the Translated aliases to be like this, where the ord will go through observations object:
+     <aliases>
+		   <alias associationObject="Observations">
+			   <key>obs</key>
+			   <value>observations</value>
+		   </alias>
+		   <alias associationObject="Order">
+			   <key>ord</key>
+			   <value>obs.order</value>
+		   </alias>
+	   </aliases>
+  :)
+  
+  (: For this situation, we DO NOT want the updateParmAlias function to update any parameter values.
+     Therefore, I am doing this in a separate XQuery Transformation. 
+     I know this tranAlias function is getting complex, We may want to redesign this in the future. :)
+
+  for $p at $i in $inputCopy3//fq:parameter[@extraAlias]
+  let $key := substring-before($p/@extraAlias,$fqt:DELIMITER)
+  let $val := substring-after($p/@extraAlias,$fqt:DELIMITER)
+  return
+  (: Insert into the First <query> parent, 
+     therefore, 
+     if the parameter is in a sub <query>,
+     it will only insert into the <aliases> node within the same <query>, 
+     without affecting outter <query> nodes!
+     This is using the FIRST[1] ancestor XPath.
+  :)
+  if ($key and $val) then
+	  insert node
+	    <alias>
+			  <key>{$key}</key>
+				<value>{$val}</value>
+			</alias>
+	    into $p/ancestor::fq:query[1]//fq:aliases
+  else()
+
+) (: End Modify :)
+return $inputCopy3
 
 (: END Function :)
 };
@@ -1199,7 +1278,7 @@ modify (
     (: Remove all Aliases that are not being used :)
     (: Sometimes one Source Alias translates to multiple target Aliases :)
     (: However, not all translated Aliases may be needed :)
-    for $alias in $inputCopy//fq:alias
+    for $alias in $inputCopy//fq:alias[@oldAliasKey]
       let $key := $alias/fq:key
       return
         if (not(fn:exists($inputCopy//fq:parameter[fn:tokenize(.,'\.')[1]=$key]))) then
@@ -1228,12 +1307,18 @@ modify (
     (: Delete ALL aliasKey Attributes on SUCCESS :)
     delete node $inputCopy//@aliasKey,
     delete node $inputCopy//@oldAliasKey,
-    delete node $inputCopy//@attrAlias
+    delete node $inputCopy//@attrAlias,
+    delete node $inputCopy//@extraAlias
 
     ,(: Do more stuff :)
 
     (: Delete ALL obsType Attributes on SUCCESS :)
     delete node $inputCopy//@obsType
+
+   ,(: Do more stuff :)
+
+    (: Delete moreCriteria Attributes on SUCCESS :)
+    delete node $inputCopy//@moreCriteria
 
   )
   else( (: DO NOTHING :) )
@@ -1369,17 +1454,17 @@ declare function fqt:getAlias($mdrResponse,$outerIndex,$oldAliasKey,$tgNmspcId)
       let $mdrKey := <key>{concat( $entry/value/text(), $compositeIndex )}</key>
     for $entry in $assoc/properties/entry[key='ALIAS_VALUE']
       let $mdrValue := <value>{$entry/value/text()}</value>
-    
-  (: Return Alias Node(s) :)
-  return
-  if ($assoc/properties/entry[starts-with(key,'OBSERVATION_TYPE')]) then
-    (: Creates Multiple <alias> nodes if there are more than one OBSERVATION_TYPE entry :)
-    for $entry in $assoc/properties/entry[starts-with(key,'OBSERVATION_TYPE')]
-    let $obsType := $entry/value/text()
-    return <alias oldAliasKey='{$oldAliasKey}' obsType='{$obsType}' associationObject='{$mdrAssocObject}'>{$mdrKey}{$mdrValue}</alias>
-  else
-    <alias oldAliasKey='{$oldAliasKey}' associationObject='{$mdrAssocObject}'>{$mdrKey}{$mdrValue}</alias>
-    
+
+		(: Return Alias Node(s) :)
+		return
+      if ($assoc/properties/entry[starts-with(key,'OBSERVATION_TYPE')]) then
+		    (: Creates Multiple <alias> nodes if there are more than one OBSERVATION_TYPE entry :)
+		    for $obsEntry in $assoc/properties/entry[starts-with(key,'OBSERVATION_TYPE')]
+		    let $obsType := $obsEntry/value/text()
+		    return <alias oldAliasKey='{$oldAliasKey}' obsType='{$obsType}' associationObject='{$mdrAssocObject}'>{$mdrKey}{$mdrValue}</alias>
+		  else
+		    <alias oldAliasKey='{$oldAliasKey}' associationObject='{$mdrAssocObject}'>{$mdrKey}{$mdrValue}</alias>
+
 };
 
 
@@ -1736,19 +1821,57 @@ as document-node()
 copy $inputCopy := $inputXML
 modify (
 
-  for $c in $inputCopy//fq:criteria[@moreCriteria]
+  for $translatedCriteria in $inputCopy//fq:criteria[@moreCriteria]
     (: Convert Property String into a Node, Awesome! :)
-    let $propVal := fn:parse-xml($c/@moreCriteria)
+    let $content := fn:parse-xml($translatedCriteria/@moreCriteria)
+    
+    (: Since XQuery Transformations can only manipulate content that is within the inputCopy, 
+       we need to call another function to fill the Template Contents. :)
+    (: No can do this!
+    for $templateCriteria in $content//fq:criteria[@moreCriteria="ReplaceMe"]
+      return replace node $templateCriteria with $translatedCriteria
+    :)
+    
     return (
-      (: Insert into the PARENT Node! :)
-      insert node $propVal into $c/..
-      , (: Cleanup the XML Attribute :)
-      delete node $c/@moreCriteria
+
+      replace node $translatedCriteria
+         with fqt:fillContent($translatedCriteria,$content)
+         
+      (: We cannot delete and replace within the same Transformation, 
+         So we will cleanup in the cleanup function instead. :)
+      (: delete node $translatedCriteria/@moreCriteria :)
     )
-  
+      
 ) (: End Modify :)
 return $inputCopy
 
 }; (: END OF FUNCTION fqt:transMoreCriteria :)
+
+
+(:=====================================================================:)
+(: fillContent                                                         :)
+(: Fill Template with Criteria Content                                 :)
+(:=====================================================================:)
+declare function fqt:fillContent($translatedCriteria,$template)
+as document-node()
+{
+
+(: BEGIN Transformation :)
+copy $templateCopy := $template
+modify (
+  
+  (: Get the <criteria> in Template, and replace it with Translated Criteria :)
+  for $c in $templateCopy//fq:criteria[@moreCriteria=$fqt:ReplaceMe]
+    return (
+      replace node $c with $translatedCriteria
+      (: We cannot delete and replace within the same Transformation, 
+         So we will cleanup in the cleanup function instead. :)
+      (: delete node $c/@moreCriteria :)
+    )
+
+) (: End Modify :)
+return $templateCopy
+
+}; (: END OF FUNCTION fqt:fillTemplate :)
 
 (: END OF MODULE :)

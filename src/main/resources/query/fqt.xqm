@@ -1237,11 +1237,12 @@ modify (
       (: let $attrName := fqt:getAttrNameFromCriteria($c) :)
       (: Get the Source Attribute Name instead :)
       let $attrName := fn:data($p/@sourceAttrText)
+      let $attrVal := fn:data($p)
       return
       insert node
         <error xmlns="http://further.utah.edu/core/ws">
           <code>DTS_QUERY_TRANSLATION_ERROR</code>
-          <message>DTS Mapping for [ {$fqt:FURTHeR}.{$attrName} ] May be Missing</message>
+          <message>DTS Mapping for [ {$fqt:FURTHeR}.{$attrName}={$attrVal} ] May be Missing</message>
         </error>
         into $inputCopy
   )

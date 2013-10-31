@@ -328,7 +328,8 @@ copy $transFields := $mdrPerson
 modify (
 
   (: Get Data from External Person :)  
-  for $field in $transFields//*[@extPath != $frt:EMPTY]
+  (: Only Process Fields that have an External Path, AND is not marked as SKIP :)
+  for $field in $transFields//*[@extPath != $frt:EMPTY and @extPath != $frt:SKIP]
     (: Get the External Field Value using Dynamic Evaluation Function :)
     (: Full Path should be starting from under the rootObject node :)
     (: Create a String to represent the Full Document Path starting with a Slash '/' :)

@@ -16,31 +16,44 @@
     limitations under the License.
 
 -->
-<query xmlns="http://further.utah.edu/core/query" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" rootObject="Person">
-  <rootCriterion>
-    <searchType>CONJUNCTION</searchType>
-    <criteria>
-      <searchType>SIMPLE</searchType>
-      <parameters>
-        <parameter xsi:type="RelationType">EQ</parameter>
-        <parameter xsi:type="xs:string">pa.value</parameter>
-        <parameter xsi:type="xs:string">Caucasian</parameter>
-      </parameters>
-    </criteria>
-    <criteria>
-      <searchType>SIMPLE</searchType>
-      <parameters>
-        <parameter xsi:type="RelationType">EQ</parameter>
-        <parameter xsi:type="xs:string">pa.personAttributeType</parameter>
-        <parameter xsi:type="xs:integer">1</parameter>
-      </parameters>
-    </criteria>
-  </rootCriterion>
-  <sortCriteria/>
-  <aliases>
-    <alias>
-      <key>pa</key>
-      <value>personAttributes</value>
-    </alias>
-  </aliases>
+<query rootObject="Person" xmlns="http://further.utah.edu/core/query"
+	xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<rootCriterion>
+		<searchType>CONJUNCTION</searchType>
+		<criteria>
+			<searchType>IN</searchType>
+			<parameters>
+				<parameter xsi:type="xs:string">personId</parameter>
+			</parameters>
+			<query rootObject="Person">
+				<rootCriterion>
+					<searchType>CONJUNCTION</searchType>
+					<criteria>
+						<searchType>SIMPLE</searchType>
+						<parameters>
+							<parameter xsi:type="RelationType">EQ</parameter>
+							<parameter xsi:type="xs:string">pa.value</parameter>
+							<parameter xsi:type="xs:string">Caucasian</parameter>
+						</parameters>
+					</criteria>
+					<criteria>
+						<searchType>SIMPLE</searchType>
+						<parameters>
+							<parameter xsi:type="RelationType">EQ</parameter>
+							<parameter xsi:type="xs:string">pa.personAttributeType</parameter>
+							<parameter xsi:type="xs:long">1</parameter>
+						</parameters>
+					</criteria>
+				</rootCriterion>
+				<aliases>
+					<alias associationObject="PersonAttribute">
+						<key>pa</key>
+						<value>personAttributes</value>
+					</alias>
+				</aliases>
+			</query>
+		</criteria>
+	</rootCriterion>
+	<sortCriteria />
+	<aliases />
 </query>

@@ -450,12 +450,13 @@ modify (
     (: let $attrName := fn:name($field) :)
     (: Use the Source Attribute Name instead :)
     let $attrName := fn:data($field/@sourceAttrText)
+    let $attrVal := fn:data($field)
       return
       replace node $inputCopy/*
          with
          <error xmlns="http://further.utah.edu/core/ws">
            <code>DTS_RESULT_TRANSLATION_ERROR</code>
-           <message>DTS Mapping for [ {$srcNmspcName}.{$attrName} ] May be Missing</message>
+           <message>DTS Mapping for [ {$srcNmspcName}.{$attrName}={$attrVal} ] May be Missing</message>
          </error>
   
   else if ($inputCopy/ResultList//*[@multiValueError]) then 

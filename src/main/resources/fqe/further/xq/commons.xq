@@ -26,3 +26,15 @@ declare function com:emptyNode()
   let $n := com:getNode()
   return $n/null
 };
+
+declare function com:add-commas-to-positive-integer ( $in as xs:string? ) as xs:string 
+{
+  if (string-length($in) < 4) then ($in)
+  else (
+        let $mod := string-length($in) mod 3
+        let $prefix := if ($mod = 0) then (concat(substring($in, 1, 3), ',')) else (concat(substring($in, 1, $mod), ','))
+        let $remainder :=  if ($mod = 0) then (substring($in, 4)) else (substring($in, $mod+1))
+        return concat($prefix, com:add-commas-to-positive-integer(($remainder)))
+     )
+ } ;
+

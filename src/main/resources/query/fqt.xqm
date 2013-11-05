@@ -114,6 +114,7 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   let $obsTypeInput := fqt:insertObsType($initializedInput)
   
   (: Call preTransOMOP Special Case :)
+  (: Possibly make preTranslations Generic (MDR Driven) to ALL Data Sources in the Future :)
   let $preTranslatedOMOP := fqt:preTransOMOP($obsTypeInput,$targetNamespaceId)
   
   (: Call transCriteriaPhrase :)
@@ -387,7 +388,9 @@ modify (
              , (: Process Code Translation Next :)
   
              (: Determine if we need to Call DTS to Translate Coded Value :)
-             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
+             (: Skip the parameters with preTranslation Errors :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]
+                 and $c/fq:parameters/fq:parameter[3]/@dtsFlag!=$fqt:ERROR) then 
              
                let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[3]/text()
                
@@ -837,7 +840,8 @@ modify (
   
                (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
                (: The first parameter is the Attribute Name, the rest are Attribute Values :)
-               for $parm in $c/fq:parameters/fq:parameter[position()>1]
+               (: Skip the parameters with preTranslation Errors :)
+               for $parm in $c/fq:parameters/fq:parameter[position()>1 and @dtsFlag!=$fqt:ERROR]
                  
                  (:return
                  
@@ -861,6 +865,10 @@ modify (
                      let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
                    
                      return
+                     
+                       (: DEBUG URL :)
+                       (: replace value of node $parm with $dtsURL :)
+                       
                        if ($translatedPropVal) then (
                          replace value of node $parm with $translatedPropVal
                          ,
@@ -1687,8 +1695,10 @@ modify (
       for $criteria in $criteriaGroup/fq:criteria[fn:tokenize(fq:parameters/fq:parameter[2],'\.')[last()] = 'observation'
                                                   and fq:searchType='SIMPLE']
         
+        (: Get Source Attribute Text and Value :)
+        let $sourceAttrText := $criteria/fq:parameters/fq:parameter[2]
         let $dtsSrcPropVal := $criteria/fq:parameters/fq:parameter[3]
-        
+
         (: Call DTS :)
         let $dtsResponse := further:getTranslatedConcept($fqt:ICD-9,
                                                          $fqt:dtsSrcPropNm,
@@ -1709,14 +1719,20 @@ modify (
         return
         if ($translatedPropVal) then
           replace value of node $criteria/fq:parameters/fq:parameter[3] with $translatedPropVal
-        else
-          replace value of node $criteria/fq:parameters/fq:parameter[3] with $fqt:ZERO
+        else (
+          (: Mark for Error so we do not Translate Again in transCriteria Function :)
+          replace value of node $criteria/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR,
+          insert node attribute sourceAttrText {$sourceAttrText} into $criteria/fq:parameters/fq:parameter[3]
+        )
           
       , (: Do more Stuff :)
 
       (: Strip out the observation value for IN searchType :)
       for $criteria in $criteriaGroup/fq:criteria[fn:tokenize(fq:parameters/fq:parameter[1],'\.')[last()] = 'observation'
                                                   and fq:searchType='IN']
+
+        (: Get Source Attribute Name :)
+        let $sourceAttrText := $criteria/fq:parameters/fq:parameter[1]
 
         (: For Parameters greater than the first position :)
         for $parm in $criteria/fq:parameters/fq:parameter[position()>1]
@@ -1741,8 +1757,11 @@ modify (
           return
           if ($translatedPropVal) then
             replace value of node $parm with $translatedPropVal
-          else
-            replace value of node $parm with $fqt:ZERO
+          else (
+            (: Mark for Error so we do not Translate Again in transCriteria Function :)
+            replace value of node $parm/@dtsFlag with $fqt:ERROR,
+            insert node attribute sourceAttrText {$sourceAttrText} into $parm
+          )
         
     ) (: End Return :)
 

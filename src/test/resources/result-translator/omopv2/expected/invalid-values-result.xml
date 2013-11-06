@@ -18,5 +18,5 @@
 -->
 <error xmlns="http://further.utah.edu/core/ws">
  <code>DTS_RESULT_TRANSLATION_ERROR</code>
- <message>DTS Mapping for [ OMOP-V2.genderConceptId ] May be Missing</message>
+ <message>DTS Mapping for [ OMOP-V2.genderConceptId=1 ] May be Missing</message>
 </error>

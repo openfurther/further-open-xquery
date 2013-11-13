@@ -33,11 +33,11 @@
 	<aliases>
 		<alias associationObject="Order">
 			<key>ord11</key>
-			<value>obs.order</value>
+			<value>p.orders</value>
 		</alias>
 		<alias>
-			<key>obs</key>
-			<value>observations</value>
+			<key>p</key>
+			<value>patient</value>
 		</alias>
 	</aliases>
 </query>

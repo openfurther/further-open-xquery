@@ -19,10 +19,10 @@
 <ResultList>
   <Person>
     <id>
-      <datasetId>862c9130-0e89-11e3-bb9f-f23c91aec05e</datasetId>
-      <id>25990</id>
+      <datasetId>1234</datasetId>
+      <id>0</id>
     </id>
-    <compositeId>862c9130-0e89-11e3-bb9f-f23c91aec05e:25990</compositeId>
+    <compositeId>1234:0</compositeId>
     <administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
     <administrativeGender>248153007</administrativeGender>
     <raceNamespaceId>30</raceNamespaceId>
@@ -40,10 +40,10 @@
   </Person>
   <Person>
     <id>
-      <datasetId>862c9130-0e89-11e3-bb9f-f23c91aec05e</datasetId>
-      <id>27467</id>
+      <datasetId>1234</datasetId>
+      <id>1</id>
     </id>
-    <compositeId>862c9130-0e89-11e3-bb9f-f23c91aec05e:27467</compositeId>
+    <compositeId>1234:1</compositeId>
     <administrativeGenderNamespaceId>30</administrativeGenderNamespaceId>
     <administrativeGender>248152002</administrativeGender>
     <raceNamespaceId>30</raceNamespaceId>

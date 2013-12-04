@@ -12,9 +12,9 @@
 	<modelVersion>4.0.0</modelVersion>
 	<artifactId>xquery-open-artifacts</artifactId>
 	<packaging>jar</packaging>
-	<name>FURTHeR Open XQuery Artifacts</name>
-	<description>FURTHeR Open XQuery Artifacts</description>
-	<url>http://further.utah.edu</url>
+	<name>OpenFurther XQuery Artifacts</name>
+	<description>OpenFurther XQuery Artifacts</description>
+	<url>http://openfurther.org/</url>
 
 	<dependencies>
 

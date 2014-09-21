@@ -35,7 +35,8 @@ import org.junit.runners.Suite.SuiteClasses;
  */
 @RunWith(Suite.class)
 @SuiteClasses(
-{ ITestSpecDsOmopV2ResultTranslator.class, ITestSpecDsOmopV2QueryTranslator.class })
+{ })
+// { ITestSpecDsOmopV2ResultTranslator.class, ITestSpecDsOmopV2QueryTranslator.class })
 public class DsOmopv2Suite
 {
 

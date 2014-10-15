@@ -45,10 +45,7 @@ declare variable $fqt:FURTHER as xs:string := '32769';
 (: We are using SNOMED (Namespace ID 30) for ObservationType Values :)
 declare variable $fqt:SNOMED as xs:string := '30';
 
-(: OMOP has a special case where ICD-9 needs to be translated to SNOMED first, 
-   before translating to OMOP-V2 
-   SNOMED uses the Standard 'Code in Source' Property Name :)
-declare variable $fqt:OMOP-V2 as xs:string := '32868';
+@DSCUSTOM-16@
 declare variable $fqt:ICD-9 as xs:string := '10';
 declare variable $fqt:LOINC as xs:string := '5102';
 
@@ -112,13 +109,10 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   
   (: Call insertObsType :)
   let $obsTypeInput := fqt:insertObsType($initializedInput)
+
+  let $translatedCriteriaPhrase := fqt:transCriteriaPhrase($obsTypeInput,$targetNamespaceId)
   
-  (: Call preTransOMOP Special Case :)
-  (: Possibly make preTranslations Generic (MDR Driven) to ALL Data Sources in the Future :)
-  let $preTranslatedOMOP := fqt:preTransOMOP($obsTypeInput,$targetNamespaceId)
-  
-  (: Call transCriteriaPhrase :)
-  let $translatedCriteriaPhrase := fqt:transCriteriaPhrase($preTranslatedOMOP,$targetNamespaceId)
+@DSCUSTOM-17@
     
   (: Call transSingleCriteria :)
   let $translatedSingleCriteria := fqt:transSingleCriteria($translatedCriteriaPhrase,$targetNamespaceId)
@@ -1659,117 +1653,7 @@ return $inputCopy
 };
 
 
-(:==================================================================:)
-(: preTransOMOP                                                     :)
-(: Pre-Translate ICD-9 Codes into SNOMED for OMOP Target ONLY!      :)
-(: Since DTS Maps from ICD-9 to SNOMED, then to OMOP                :)
-(: In the ideal world, if ICD-9 mapped to OMOP Directly             :)
-(: we would not need this custom special function.                  :)
-(:==================================================================:)
-declare function fqt:preTransOMOP($inputXML as document-node(),
-                                  $targetNamespaceId as xs:string)
-{
-copy $inputCopy := $inputXML
-modify (
-
-  (: For OMOP Targets ONLY! :)
-  if ($targetNamespaceId = $fqt:OMOP-V2) then 
-
-    (: Find Each ICD-9 Value :)
-    for $criteriaGroup in $inputCopy//*[fq:searchType/text()='CONJUNCTION' 
-                                        and fq:criteria[fq:searchType/text()='SIMPLE' 
-                                        and fn:contains(fq:parameters/fq:parameter[2]/text(),'observationNamespaceId')
-                                        and fq:parameters/fq:parameter[3]/text()=$fqt:ICD-9]]
-       
-      return (
-      
-      (: Replace NamespaceId to SNOMED :)
-      for $criteria in $criteriaGroup/fq:criteria[fn:contains(fq:parameters/fq:parameter[2]/text(),'observationNamespaceId')]
-        return replace value of node $criteria/fq:parameters/fq:parameter[3] with $fqt:SNOMED
-
-      , (: Do more Stuff :)
-      
-      (: Note that ICD-9 Codes ONLY Occur in 'SIMPLE', or 'IN' searchTypes :)
-      
-      (: Strip out the observation value for SIMPLE searchType :)
-      for $criteria in $criteriaGroup/fq:criteria[fn:tokenize(fq:parameters/fq:parameter[2],'\.')[last()] = 'observation'
-                                                  and fq:searchType='SIMPLE']
-        
-        (: Get Source Attribute Text and Value :)
-        let $sourceAttrText := $criteria/fq:parameters/fq:parameter[2]
-        let $dtsSrcPropVal := $criteria/fq:parameters/fq:parameter[3]
-
-        (: Call DTS :)
-        let $dtsResponse := further:getTranslatedConcept($fqt:ICD-9,
-                                                         $fqt:dtsSrcPropNm,
-                                                         $dtsSrcPropVal,
-                                                         $fqt:SNOMED,
-                                                         $fqt:dtsSrcPropNm)
-                                                         
-        (: Debug DTS URL :)
-        (:let $dtsURL := further:getConceptTranslationRestUrl($fqt:ICD-9,
-                                                            $fqt:dtsSrcPropNm,
-                                                            $dtsSrcPropVal,
-                                                            $fqt:SNOMED,
-                                                            $fqt:dtsSrcPropNm):)
-       
-        let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-        
-        (: if there is a response :)
-        return
-        if ($translatedPropVal) then
-          replace value of node $criteria/fq:parameters/fq:parameter[3] with $translatedPropVal
-        else (
-          (: Mark for Error so we do not Translate Again in transCriteria Function :)
-          replace value of node $criteria/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR,
-          insert node attribute sourceAttrText {$sourceAttrText} into $criteria/fq:parameters/fq:parameter[3]
-        )
-          
-      , (: Do more Stuff :)
-
-      (: Strip out the observation value for IN searchType :)
-      for $criteria in $criteriaGroup/fq:criteria[fn:tokenize(fq:parameters/fq:parameter[1],'\.')[last()] = 'observation'
-                                                  and fq:searchType='IN']
-
-        (: Get Source Attribute Name :)
-        let $sourceAttrText := $criteria/fq:parameters/fq:parameter[1]
-
-        (: For Parameters greater than the first position :)
-        for $parm in $criteria/fq:parameters/fq:parameter[position()>1]
-
-          (: Call DTS :)
-          let $dtsResponse := further:getTranslatedConcept($fqt:ICD-9,
-                                                           $fqt:dtsSrcPropNm,
-                                                           $parm,
-                                                           $fqt:SNOMED,
-                                                           $fqt:dtsSrcPropNm)
-
-          (: Debug DTS URL :)
-          (:let $dtsURL := further:getConceptTranslationRestUrl($fqt:ICD-9,
-                                                              $fqt:dtsSrcPropNm,
-                                                              $parm,
-                                                              $fqt:SNOMED,
-                                                              $fqt:dtsSrcPropNm):)
-
-          let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-        
-          (: if there is a response :)
-          return
-          if ($translatedPropVal) then
-            replace value of node $parm with $translatedPropVal
-          else (
-            (: Mark for Error so we do not Translate Again in transCriteria Function :)
-            replace value of node $parm/@dtsFlag with $fqt:ERROR,
-            insert node attribute sourceAttrText {$sourceAttrText} into $parm
-          )
-        
-    ) (: End Return :)
-
-  else( (: DO NOTHING if Target is NOT OMOP :) )
-    
-) (: End Modify :)
-return $inputCopy
-};
+@DSCUSTOM-22@
 
 
 (:=====================================================================:)

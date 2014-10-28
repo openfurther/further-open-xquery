@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<query xmlns="http://further.utah.edu/core/query" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<rootCriterion>
+		<searchType>CONJUNCTION</searchType>
+		<criteria>
+			<searchType>SIMPLE</searchType>
+			<parameters>
+				<parameter xsi:type="RelationType">EQ</parameter>
+				<parameter xsi:type="xs:string">sex</parameter>
+				<parameter xsi:type="xs:string">M</parameter>
+			</parameters>
+		</criteria>
+		<criteria>
+			<searchType>BETWEEN</searchType>
+			<parameters>
+				<parameter xsi:type="xs:string">byr</parameter>
+				<parameter xsi:type="xs:int">1970</parameter>
+				<parameter xsi:type="xs:int">1972</parameter>
+			</parameters>
+		</criteria>
+	</rootCriterion>
+	<aliases />
+</query>

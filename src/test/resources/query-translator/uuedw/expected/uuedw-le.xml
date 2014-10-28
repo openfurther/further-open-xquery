@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<query xmlns="http://further.utah.edu/core/query" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" rootObject="Patient">
+	<rootCriterion>
+		<searchType>SIMPLE</searchType>
+		<parameters>
+			<parameter xsi:type="RelationType">LE</parameter>
+			<parameter xsi:type="xs:string">age</parameter>
+			<parameter xsi:type="xs:int">30</parameter>
+		</parameters>
+	</rootCriterion>
+	<aliases />
+</query>

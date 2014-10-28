@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<query xmlns="http://further.utah.edu/core/query" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" rootObject="Patient">
+  <rootCriterion>
+    <searchType>CONJUNCTION</searchType>
+    <criteria>
+      <searchType>SIMPLE</searchType>
+      <parameters>
+        <parameter xsi:type="RelationType">EQ</parameter>
+        <parameter xsi:type="xs:string">medord1.multumDCode</parameter>
+        <parameter xsi:type="xs:string">d00153</parameter>
+      </parameters>
+    </criteria>
+  </rootCriterion>
+  <aliases>
+    <alias associationObject="MedicationOrder">
+      <key>medord1</key>
+      <value>medicationOrders</value>
+    </alias>
+  </aliases>
+</query>

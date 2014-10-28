@@ -59,15 +59,26 @@
 	<!-- ResourceDao -->
 	<context:component-scan base-package="edu.utah.further.mdr.data.dao" />
 
+	<!-- IdTranslators -->
+	<context:component-scan base-package="edu.utah.further.fqe.mpi.impl.service" />
+
+	<util:map id="translationProviders">
+		<entry key="OMOP-v2" value-ref="omopIdTranslator" />
+		<entry key="OpenMRS-V1_9" value-ref="omrsIdTranslator" />
+		<entry key="UUEDW" value-ref="uuedwIdTranslator" />
+		<entry key="UPDB" value-ref="updbIdTranslator" />
+	</util:map>
+
 	<!-- =========================================== -->
 	<!-- Data Layer -->
 	<!-- =========================================== -->
 
-	<!-- Data source: reads a properties file and injects them -->
-	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
-		<property name="dataSourceName" value="${datasource.name}" />
-		<property name="driverClass" value="${datasource.driver}" />
-		<property name="jdbcUrl" value="${datasource.url}" />
+
+	<!-- MDR Data source: reads a properties file and injects them -->
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource" primary="true">
+		<property name="dataSourceName" value="${mdr.datasource.name}" />
+		<property name="driverClass" value="${mdr.datasource.driver}" />
+		<property name="jdbcUrl" value="${mdr.datasource.url}" />
 		<property name="testConnectionOnCheckin" value="${c3p0.testConnectionOnCheckin}" />
 		<property name="preferredTestQuery" value="${c3p0.preferredTestQuery}" />
 		<property name="maxIdleTime" value="${c3p0.maxIdleTime}" />
@@ -80,15 +91,15 @@
 				<prop key="c3p0.maxStatements">${c3p0.maxStatements}</prop>
 				<prop key="c3p0.acquireRetryAttempts">${c3p0.acquireRetryAttempts}</prop>
 				<prop key="c3p0.acquireIncrement">${c3p0.acquireIncrement}</prop>
-				<prop key="user">${datasource.user}</prop>
-				<prop key="password">${datasource.password}</prop>
+				<prop key="user">${mdr.datasource.user}</prop>
+				<prop key="password">${mdr.datasource.password}</prop>
 			</props>
 		</property>
 	</bean>
 
 	<!-- Session factory -->
 	<bean id="sessionFactory"
-		class="org.springframework.orm.hibernate3.annotation.AnnotationSessionFactoryBean">
+		class="org.springframework.orm.hibernate3.annotation.AnnotationSessionFactoryBean" primary="true" >
 		<property name="dataSource" ref="dataSource" />
 
 		<!-- Hibernate configuration properties (read from a properties file) -->
@@ -97,9 +108,9 @@
 				<!-- ################################## -->
 				<!-- Hibernate configuration -->
 				<!-- ################################## -->
-				<prop key="hibernate.dialect">${hibernate.dialect}</prop>
-				<prop key="hibernate.show_sql">${hibernate.show_sql}</prop>
-				<prop key="hibernate.default_schema">${hibernate.default_schema}</prop>
+				<prop key="hibernate.dialect">${mdr.hibernate.dialect}</prop>
+				<prop key="hibernate.show_sql">${mdr.hibernate.show_sql}</prop>
+				<prop key="hibernate.default_schema">${mdr.hibernate.default_schema}</prop>
 
 				<!-- ============================ -->
 				<!-- Hibernate C3P0 configuration -->
@@ -147,6 +158,96 @@
 		</property>
 	</bean>
 
+
+	<!-- HSQL Data source: reads a properties file and injects them -->
+	<bean id="identifierDataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+		<property name="dataSourceName" value="${hsql.datasource.name}" />
+		<property name="driverClass" value="${hsql.datasource.driver}" />
+		<property name="jdbcUrl" value="${hsql.datasource.url}" />
+		<property name="testConnectionOnCheckin" value="${c3p0.testConnectionOnCheckin}" />
+		<property name="preferredTestQuery" value="${c3p0.preferredTestQuery}" />
+		<property name="maxIdleTime" value="${c3p0.maxIdleTime}" />
+		<property name="idleConnectionTestPeriod" value="${c3p0.idleConnectionTestPeriod}" />
+		<property name="properties">
+			<props>
+				<prop key="c3p0.initialPoolSize">${c3p0.initialPoolSize}</prop>
+				<prop key="c3p0.minPoolSize">${c3p0.minPoolSize}</prop>
+				<prop key="c3p0.maxPoolSize">${c3p0.maxPoolSize}</prop>
+				<prop key="c3p0.maxStatements">${c3p0.maxStatements}</prop>
+				<prop key="c3p0.acquireRetryAttempts">${c3p0.acquireRetryAttempts}</prop>
+				<prop key="c3p0.acquireIncrement">${c3p0.acquireIncrement}</prop>
+				<prop key="user">${hsql.datasource.user}</prop>
+				<prop key="password">${hsql.datasource.password}</prop>
+			</props>
+		</property>
+	</bean>
+
+	<!-- Session factory -->
+	<bean id="identifierSessionFactory"
+		class="org.springframework.orm.hibernate3.annotation.AnnotationSessionFactoryBean">
+		<property name="dataSource" ref="identifierDataSource" />
+
+		<!-- Hibernate configuration properties (read from a properties file) -->
+		<property name="hibernateProperties">
+			<props>
+				<!-- ################################## -->
+				<!-- Hibernate configuration -->
+				<!-- ################################## -->
+				<prop key="hibernate.dialect">${hsql.hibernate.dialect}</prop>
+				<prop key="hibernate.show_sql">${hsql.hibernate.show_sql}</prop>
+				<prop key="hibernate.default_schema">${hsql.hibernate.default_schema}</prop>
+
+				<!-- ============================ -->
+				<!-- Hibernate C3P0 configuration -->
+				<!-- ============================ -->
+				<!-- We must declare 6 configuration properties, which are synchronized 
+					with the C3P0 data source configuration values above. Otherwise they are 
+					set to Hibernate defaults, overriding the C3P0 configuration. http://www.mchange.com/projects/c3p0/index.html#hibernate-specific -->
+				<prop key="hibernate.c3p0.acquire_increment">${c3p0.acquireIncrement}</prop>
+				<prop key="hibernate.c3p0.idle_test_period">${c3p0.idleConnectionTestPeriod}</prop>
+				<prop key="hibernate.c3p0.timeout">${c3p0.maxIdleTime}</prop>
+				<prop key="hibernate.c3p0.max_size">${c3p0.maxPoolSize}</prop>
+				<prop key="hibernate.c3p0.max_statements">${c3p0.maxStatements}</prop>
+				<prop key="hibernate.c3p0.min_size">${c3p0.minPoolSize}</prop>
+			</props>
+		</property>
+
+		<!-- Using improved naming strategy -->
+		<property name="namingStrategy">
+			<bean class="org.hibernate.cfg.DefaultNamingStrategy" />
+		</property>
+
+		<!-- Reads package-level Hibernate annotations. Unfortunately, this has 
+			to be manually maintained for all model packages -->
+		<property name="annotatedPackages">
+			<list>
+				<value><![CDATA[edu.utah.further.fqe.mpi.impl.domain]]></value>
+				<value><![CDATA[edu.utah.further.fqe.mpi.impl.resolution]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.impl.domain.asset]]></value>
+			</list>
+		</property>
+
+		<!-- Mapping annotated classes using search patterns -->
+		<property name="annotatedClasses">
+			<!-- May need to be replaced by a edu.utah.further.core.util.io.ResourceMatchingFactoryBean 
+				factory bean if this list gets too large. -->
+			<list>
+				<value><![CDATA[edu.utah.further.fqe.mpi.impl.domain.IdentifierEntity]]></value>
+				<value><![CDATA[edu.utah.further.fqe.mpi.impl.domain.LookupEntity]]></value>
+				<value><![CDATA[edu.utah.further.fqe.mpi.impl.resolution.IdentityResolutionLookupTable]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.impl.domain.asset.AssetEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.impl.domain.asset.AssetAssociationEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.impl.domain.asset.AssetAssociationPropertyEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.impl.domain.asset.ResourceEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.impl.domain.asset.VersionEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.common.domain.asset.ActivationInfoEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.common.domain.asset.LookupGroupEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.common.domain.asset.LookupValueEntity]]></value>
+				<value><![CDATA[edu.utah.further.mdr.data.common.domain.asset.ResourceTypeEntity]]></value>
+			</list>
+		</property>
+	</bean>
+
 	<!-- =========================================== -->
 	<!-- Transaction management -->
 	<!-- =========================================== -->
@@ -154,11 +255,28 @@
 	<!-- Enable the configuration of transactional behavior based on annotations -->
 	<tx:annotation-driven />
 
-	<!-- a PlatformTransactionManager is still required -->
+	<!-- PlatformTransactionManagers still required -->
+	<bean id="identifierTransactionManager"
+		class="org.springframework.orm.hibernate3.HibernateTransactionManager">
+		<property name="sessionFactory" ref="identifierSessionFactory" />
+	        <qualifier value="identifierTransactionManager"/>
+	</bean>
+
 	<bean id="transactionManager"
 		class="org.springframework.orm.hibernate3.HibernateTransactionManager">
 		<property name="sessionFactory" ref="sessionFactory" />
+	        <qualifier value="transactionManager"/>
 	</bean>
+
+	<!-- Locally define this: getting duplicate beans defined spring error -->
+        <bean id="identifierDao" class="edu.utah.further.core.data.service.DaoHibernateImpl">
+                <constructor-arg index="0" ref="identifierSessionFactory"/>
+        </bean>
+
+        <!-- jdbctemplate -->
+        <bean id="identifierJdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+                <constructor-arg ref="identifierDataSource" />
+        </bean>
 
 	<!-- =========================================== -->
 	<!-- Services -->

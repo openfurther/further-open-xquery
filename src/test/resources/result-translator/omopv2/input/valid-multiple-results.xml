@@ -17,7 +17,7 @@
 
 -->
 <ResultList>
-	<Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<!-- Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 		<personId>1716</personId>
 		<genderConceptId>442986</genderConceptId>
 		<raceConceptId>4185154</raceConceptId>
@@ -34,5 +34,5 @@
 		<genderConceptId>442986</genderConceptId>
 		<raceConceptId>4211480</raceConceptId>
 		<yearOfBirth>1993</yearOfBirth>
-	</Person>
+	</Person -->
 </ResultList>

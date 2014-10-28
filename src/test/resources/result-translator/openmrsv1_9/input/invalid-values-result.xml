@@ -17,7 +17,7 @@
 
 -->
 <ResultList>
-	<Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<!--  Person xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 		<personId>6</personId>
 		<birthdate>1962-04-21</birthdate>
 		<birthdateEstimated>0</birthdateEstimated>
@@ -63,5 +63,5 @@
 				<personAttributeType>5</personAttributeType>
 			</personAttribute>
 		</personAttributes>
-	</Person>
+	</Person -->
 </ResultList>

@@ -43,11 +43,11 @@ import groovy.util.logging.Slf4j
  * @version Sep 16, 2013
  */
 @ContextConfiguration(locations = [
+	"/open-xquery-test-context.xml",
 	"/META-INF/ds/test/ds-test-mdr-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-dts-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-fqe-mpi-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-xquery-context.xml",
-	"/open-xquery-test-context.xml",
 ])
 @Slf4j
 class ITestSpecDsUpdblResultTranslator extends TranslationTest {
@@ -63,8 +63,20 @@ class ITestSpecDsUpdblResultTranslator extends TranslationTest {
 		def xQuery = url.toURL().text
 
 		def parameters = ["srcNmspcId" : "32774", "dataSetId" : "1234"]
-		def output = xQueryService.executeIntoString(
-				new ByteArrayInputStream(xQuery.bytes), result, parameters)
+                log.debug("++++++++++++++++++++++++++++++++++++++++")
+                log.debug(url);
+                log.debug(xQuery);
+                log.debug("++++++++++++++++++++++++++++++++++++++++")
+                def output
+
+                try{
+                        output = xQueryService.executeIntoString(
+                                new ByteArrayInputStream(xQuery.bytes), result, parameters)
+                } catch(ex) {
+                        log.debug("++++++++++++++++++++++++++++++++++++++++")
+                        log.debug(ex.printStackTrace())
+                        log.debug("++++++++++++++++++++++++++++++++++++++++")
+                }
 
 		//no if debug is enabled jazz cuz groovy is cool like that (it does it for you)!
 		log.debug("++++++++++++++++++++++++++++++++++++++++")

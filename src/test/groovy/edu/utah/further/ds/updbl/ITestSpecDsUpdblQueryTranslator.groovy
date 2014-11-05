@@ -42,10 +42,10 @@ import groovy.util.logging.Slf4j
  * @version Jul 3, 2013
  */
 @ContextConfiguration(locations = [
+	"/open-xquery-test-context.xml",
 	"/META-INF/ds/test/ds-test-mdr-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-dts-ws-server-context.xml",
 	"/META-INF/ds/test/ds-test-xquery-context.xml",
-	"/open-xquery-test-context.xml",
 ])
 @Slf4j
 class ITestSpecDsUpdblQueryTranslator extends TranslationTest {
@@ -60,12 +60,23 @@ class ITestSpecDsUpdblQueryTranslator extends TranslationTest {
 	def "Testing UUEDW Query Translations: #name"() {
 		given:
 		def xQuery = url.toURL().text
-		
 
 		def parameters = ["tgNmspcId" : "32774", "tgNmspcName" : "UUEDW"]
-		def result = xQueryService.executeIntoString(
+                log.debug("++++++++++++++++++++++++++++++++++++++++")
+                log.debug(url);
+                log.debug(xQuery);
+                log.debug("++++++++++++++++++++++++++++++++++++++++")
+		def result
+
+		try{
+			result = xQueryService.executeIntoString(
 				new ByteArrayInputStream(xQuery.bytes), query, parameters)
-		
+		} catch(ex) {
+                	log.debug("++++++++++++++++++++++++++++++++++++++++")
+			log.debug(ex.printStackTrace())
+                	log.debug("++++++++++++++++++++++++++++++++++++++++")
+		}
+
 		//no if debug is enabled jazz cuz groovy is cool like that (it does it for you)!
 		log.debug("++++++++++++++++++++++++++++++++++++++++")
 		log.debug(name);

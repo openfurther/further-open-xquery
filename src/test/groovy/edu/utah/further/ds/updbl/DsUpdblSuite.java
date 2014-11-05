@@ -35,8 +35,7 @@ import org.junit.runners.Suite.SuiteClasses;
  */
 @RunWith(Suite.class)
 @SuiteClasses(
-		{  })
-//{ ITestSpecDsUpdblResultTranslator.class, ITestSpecDsUpdblQueryTranslator.class })
+{ ITestSpecDsUpdblResultTranslator.class, ITestSpecDsUpdblQueryTranslator.class })
 public class DsUpdblSuite
 {
 

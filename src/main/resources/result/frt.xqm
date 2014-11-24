@@ -110,6 +110,8 @@ declare function frt:transResult($inputXML as document-node(),
   let $mdrPerson := frt:initPersonTemplate($emptyPerson,$extNmspcName)
   
   return (: $mdrPerson :)
+
+
   
     (: Validate Initialized Template :)
     if ($mdrPerson/*[@extRootObject=$frt:ERROR]) then
@@ -131,7 +133,9 @@ declare function frt:transResult($inputXML as document-node(),
 
 		  (: Return Final Cleaned Version :)
 		  return $cleaned
+  
 
+      
 };
 
 
@@ -327,16 +331,30 @@ as document-node()
 copy $transFields := $mdrPerson
 modify (
 
-  (: Get Data from External Person :)  
+  (: Get Data from External Person :)
   (: Only Process Fields that have an External Path, AND is not marked as SKIP :)
   for $field in $transFields//*[@extPath != $frt:EMPTY and @extPath != $frt:SKIP]
     (: Get the External Field Value using Dynamic Evaluation Function :)
     (: Full Path should be starting from under the rootObject node :)
     (: Create a String to represent the Full Document Path starting with a Slash '/' :)
-    let $s := concat("$doc",$field/@extPath)
+    (: let $s := concat("$doc",$field/@extPath) :)
+    (: BaseX 7.8 and above REQUIRES declaration of variable
+       before using in the eval function.
+       The variable MUST be declared as external! :)
+    (: let $s := concat("declare variable $doc external; $doc",$field/@extPath) :)
+    (: Also to support pulling out values that are in XML Attributes, we must use the fn:data function :)
+    let $s := concat("declare variable $doc external; fn:data($doc", $field/@extPath, ")" )
+    let $n := concat("declare variable $doc external; fn:name($doc", $field/@extPath, ")" )
+    
     (: Evaluate the String with a mapping to the document/element :)
     (: Took long time to figure this out, it is amazing when it works! :)
-    let $extValue := xquery:eval($s,map {"doc" := $extPerson})
+    (: Leave the map ':=' for backwards compatibility :)
+    (: The colon by itself works from BaseX 7.8 onwards,
+       but BaseX 7.7 requires := in the map :)
+    let $extValue := xquery:eval($s, map{"doc" := $extPerson})
+    (: Let's get the name of the XML Element or XML Attribute also, for Error Reporting :)
+    let $extName := xquery:eval($n, map{"doc" := $extPerson})
+       
     let $cnt := fn:count($extValue)
     return (
 
@@ -352,7 +370,11 @@ modify (
         (: Set Value for everything else :)
         replace value of node $field with $extValue
         ,
-        insert node attribute sourceAttrText {fn:name($extValue)} into $field
+        (: Insert the Name of the Source Attribute for Error Handling :)
+        (: We have added the fn:name function above :)
+        (: Therefore, we do not need the fn:name function anymore :)
+        (: insert node attribute sourceAttrText {fn:name($extValue)} into $field :)
+        insert node attribute sourceAttrText {$extName} into $field
       )
       
     ) (: End Return :)
@@ -403,7 +425,7 @@ modify (
         replace value of node $field/@dtsFlag with $frt:ERROR
 
 ) (: End Modify :)
-return 
+return
 
 (: BEGIN XQUERY TRANSFORMATION :)
 copy $transRootId := $transDTS
@@ -419,8 +441,8 @@ modify (
 ) (: End Modify :)
 return $transRootId
 
-
 (: END Function :)
+
 };
 
 
@@ -580,11 +602,19 @@ return $inputCopy2
 declare function frt:getPersonId($extNmspcId,$extPerson,$extRootObject,$extRootObjectAttr,$dataSetId) 
 {
   (: Get the External ID Value :)
-  let $s := concat("$doc/",$extRootObjectAttr)
+  (: let $s := concat("$doc/",$extRootObjectAttr) :)
+  (: BaseX 7.8 and above REQUIRES declaration of variable
+     before using in the eval function.
+     The variable MUST be declared as external! :)
+  let $s := concat("declare variable $doc external; $doc/",$extRootObjectAttr)
       
   (: Evaluate the String with a mapping to the document/element :)
   (: Took long time to figure this out, it is amazing when it works! :)
-  let $extIdValue := xquery:eval($s,map {"doc" := $extPerson})
+  (: let $extIdValue := xquery:eval($s,map {"doc" := $extPerson}) :)
+  (: Leave the map ':=' for backwards compatibility :)
+  (: The colon by itself works from BaseX 7.8 onwards,
+     but BaseX 7.7 requires := in the map :)
+  let $extIdValue := xquery:eval($s, map{"doc" := $extPerson})
 
   let $cnt := fn:count($extIdValue)
   return (
@@ -598,7 +628,7 @@ declare function frt:getPersonId($extNmspcId,$extPerson,$extRootObject,$extRootO
 		    http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/
 		    {target_object}/{target_attribute}/{source_namespace_id}/
 		    {source_object}/{source_attribute}/{source_id_value}/{queryId}
-		    
+
 		    Note: 
 		    For Result Translation, Target is always the Central Model (FURTHER Model)
 		    The Source is the External Data Source Models
@@ -607,34 +637,44 @@ declare function frt:getPersonId($extNmspcId,$extPerson,$extRootObject,$extRootO
 http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/PERSON/FPERSON_ID/32868/PERSON/PERSONID/12345/862c9130-0e89-11e3-bb9f-f23c91aec05e
 http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/PERSON/FPERSON_ID/32776/PATIENT/PAT_DE_ID/12345/862c9130-0e89-11e3-bb9f-f23c91aec05e
 		  :)
+
+      (: Strip out any @ character from $extRootObjectAttr :)
+      let $extRootObjectAttr := replace($extRootObjectAttr, '@', $frt:EMPTY)
       
-      (: Built the REST URL :)     
+      (: Built the REST URL :)
 		  let $baseURL := fn:concat($const:fqeRestServer,'/mpi/rest/id/generate/PERSON/FPERSON_ID/')
 		  let $docUrl := fn:concat($baseURL, $extNmspcId, '/', $extRootObject, '/' , $extRootObjectAttr , '/', $extIdValue , '/', $dataSetId)
 		  
 		  (: Prevent XQuery Injection Attacks :)
-		  let $parsedDocUrl := iri-to-uri($docUrl)
-		  let $result := doc($parsedDocUrl)
-		  
-		  (: Strip out the Person ID from the Result :)
-		  (: let $resolvedPersonId := $result//fqe:value/text() :)
-		  let $resolvedPersonId := $result/fqe:id/fqe:value/text()
-
-		  return (
-        
-        (: DEBUG with trace :)
-        (: trace($resolvedPersonId, 'ResolvedPersonID'), :)
-
-				<id>
-				  <datasetId>{$dataSetId}</datasetId>
-		      <id>{$resolvedPersonId}</id>
-			  </id>
-			  ,
-			  <compositeId>{$dataSetId}:{$resolvedPersonId}</compositeId>  
-		  )
+		  let $parsedDocUrl := fn:iri-to-uri($docUrl)
       
-  ) (: End of Return :)
-    
+      (: Check to see if MPI Web Service is Available First :)
+      return 
+      if (fn:doc-available($parsedDocUrl)) then
+		    
+        (: Get the MPI Resulting Data :)
+        let $result := fn:doc($parsedDocUrl)
+
+			  (: Strip out the Person ID from the Result :)
+			  (: let $resolvedPersonId := $result//fqe:value/text() :)
+			  let $resolvedPersonId := $result/fqe:id/fqe:value/text()
+	
+			  return (
+	        
+	        (: DEBUG with trace :)
+	        (: trace($resolvedPersonId, 'ResolvedPersonID'), :)
+	
+					<id>
+					  <datasetId>{$dataSetId}</datasetId>
+			      <id>{$resolvedPersonId}</id>
+				  </id>
+				  ,
+				  <compositeId>{$dataSetId}:{$resolvedPersonId}</compositeId>  
+			  ) (: End Third Inner Return :)
+      
+      else <id>Invalid_MPI_Service<url>{$parsedDocUrl}</url></id>
+
+  ) (: End First Outer Return :)
 }; (: END OF FUNCTION :)
 
 

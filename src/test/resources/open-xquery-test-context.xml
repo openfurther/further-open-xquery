@@ -35,6 +35,8 @@
     http://www.springframework.org/schema/util/spring-util-3.0.xsd
 	">
 
+        <import resource="classpath:META-INF/ds/test/ds-test-mdr-ws-client-context.xml" />
+
 	<!-- =========================================== -->
 	<!-- Properties configuration -->
 	<!-- =========================================== -->

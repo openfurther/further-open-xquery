@@ -18,15 +18,15 @@ module namespace frt = "http://further.utah.edu/result-translation";
 
 (: Import FURTHeR Module :)
 (: import module namespace further = "http://further.utah.edu/xquery-functions-module"
-    at "further.xq"; :)
+    at "../common/further.xq"; :)
 import module namespace further = 'http://further.utah.edu/xquery-functions-module'
-    at '${server.mdr.ws}${path.mdr.ws.resource.path}/fqe/further/xq/further.xq';
+       at '${server.mdr.ws}${path.mdr.ws.resource.path}/fqe/further/xq/further.xq';
 
 (: Import FURTHeR Constants Module :)
 (: import module namespace const = 'http://further.utah.edu/constants' 
-    at 'constants.xq'; :)
+    at '../common/constants.xq'; :)
 import module namespace const = 'http://further.utah.edu/constants' 
-    at '${server.mdr.ws}${path.mdr.ws.resource.path}/fqe/further/xq/constants.xq';
+       at '${server.mdr.ws}${path.mdr.ws.resource.path}/fqe/further/xq/constants.xq';
 
 (: ALWAYS Define Namespaces in XQUERY PROLOG! :)
 declare namespace fn  = 'http://www.w3.org/2005/xpath-functions';
@@ -109,10 +109,10 @@ declare function frt:transResult($inputXML as document-node(),
   (: Initialize Empty Person Template with MDR Properties :)
   let $mdrPerson := frt:initPersonTemplate($emptyPerson,$extNmspcName)
   
-  return (: $mdrPerson :)
+  return   (: DEBUG $mdrPerson   :)
 
 
-  
+
     (: Validate Initialized Template :)
     if ($mdrPerson/*[@extRootObject=$frt:ERROR]) then
 
@@ -135,7 +135,7 @@ declare function frt:transResult($inputXML as document-node(),
 		  return $cleaned
   
 
-      
+  
 };
 
 
@@ -177,6 +177,7 @@ document
     <dateOfDeath extPath="{$frt:EMPTY}"></dateOfDeath>
     <deathYear extPath="{$frt:EMPTY}"></deathYear>
     <pedigreeQuality extPath="{$frt:EMPTY}"></pedigreeQuality>
+    <Errors/>
   </Person>
 }
 
@@ -375,12 +376,15 @@ modify (
         (: Therefore, we do not need the fn:name function anymore :)
         (: insert node attribute sourceAttrText {fn:name($extValue)} into $field :)
         insert node attribute sourceAttrText {$extName} into $field
+        
       )
       
     ) (: End Return :)
 
 ) (: End Modify :)
-return 
+return
+
+
 
 (: BEGIN XQUERY TRANSFORMATION :)
 copy $transDTS := $transFields
@@ -443,6 +447,8 @@ return $transRootId
 
 (: END Function :)
 
+
+
 };
 
 
@@ -468,19 +474,44 @@ modify (
   if ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR]) then 
 
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
-    for $field in ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR])[1]
+    (: for $field in ($inputCopy/ResultList//*[@dtsFlag=$frt:ERROR])[1]:)
+    
+    (: For Every(ALL) DTS Errors :)
+    for $field in $inputCopy/ResultList//*[@dtsFlag=$frt:ERROR]
+    
     (: let $attrName := fn:name($field) :)
+    let $centralAttrName := fn:name($field)
     (: Use the Source Attribute Name instead :)
-    let $attrName := fn:data($field/@sourceAttrText)
-    let $attrVal := fn:data($field)
-      return
-      replace node $inputCopy/*
+    let $extAttrName := fn:data($field/@sourceAttrText)
+    let $extAttrVal := fn:data($field)
+      
+    return (
+      
+      (: Replace ONLY the Field Node so that we will still have a Person Result, 
+         even if DTS does NOT translate :)
+      (: replace node $inputCopy/* :)
+      
+      (:
+      replace node $field
          with
          <error xmlns="http://further.utah.edu/core/ws">
-           <code>DTS_RESULT_TRANSLATION_ERROR</code>
-           <message>DTS Mapping for [ {$srcNmspcName}.{$attrName}={$attrVal} ] May be Missing</message>
+           <code>DTS_RESULT_TRANSLATION_ERROR for [ {$centralAttrName} ]</code>
+           <message>DTS Mapping [ {$srcNmspcName}.{$extAttrName}={$extAttrVal} ] May be Missing</message>
          </error>
-  
+      :)
+      
+      (: Insert error into the parent Person Node :)
+      insert node 
+        <error xmlns="http://further.utah.edu/core/ws">
+          <code>DTS_RESULT_TRANSLATION_ERROR for [ {$centralAttrName} ]</code>
+          <message>DTS Mapping [ {$srcNmspcName}.{$extAttrName}={$extAttrVal} ] May be Missing</message>
+        </error>
+        into $field/ancestor::Person[1]/Errors
+      ,
+      (: Replace the Field Value in error with Empty String :)
+      replace value of node $field with $frt:EMPTY
+    )
+      
   else if ($inputCopy/ResultList//*[@multiValueError]) then 
     
     (: Return the First Criteria that Errored so we do not have a long list of Errors :)
@@ -697,8 +728,8 @@ declare function frt:getLeftAssoc(
   let $doc := doc($parsedDocUrl)
   
   (: Return the AssetAssociation for the Correct Namespaces :)
-  return 
-    
+  return (: DEBUG <url>{$parsedDocUrl}</url> :)
+
     if (fn:count($doc//assetAssociation[rightNamespace=$rightNmspcName and leftNamespace=$leftNmspcName]) > 1) then
       $doc//assetAssociation[rightNamespace=$rightNmspcName and leftNamespace=$leftNmspcName and properties/entry/value=$frt:pickMe]
     else 
@@ -756,7 +787,7 @@ declare function frt:getExtRootObject(
 
   let $leftAssoc := frt:getLeftAssoc($centralRootObject,$frt:FURTHeR,$extNmspcName)
   
-  return
+  return (: DEBUG $leftAssoc :)
   
     (: if there is an Association Result :)
     if ($leftAssoc/properties/entry[key=$frt:EXT_ROOT_ID_ATTR]) then

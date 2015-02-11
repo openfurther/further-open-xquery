@@ -13,22 +13,28 @@
  : See the License for the specific language governing permissions and
  : limitations under the License.
  :)
+ 
+(: The Calling Program for this Module is fqtCall.xq :)
 xquery version "3.0";
 module namespace fqt = "http://further.utah.edu/query-translation";
 
 (: Import FURTHeR Module :)
 (: Change the location of further.xq when working locally :)
-(: import module namespace further = "http://further.utah.edu/xquery-functions-module" 
-    at "../fqe/further/xq/further.xq"; :)
-import module namespace further = 'http://further.utah.edu/xquery-functions-module' 
+(: import module namespace further = "http://further.utah.edu/xquery-functions-module"
+    at "../common/further.xq"; :)
+import module namespace further = 'http://further.utah.edu/xquery-functions-module'
        at '${server.mdr.ws}${path.mdr.ws.resource.path}/fqe/further/xq/further.xq';
 
 (: Import FURTHeR Constants Module :)
 (: Change the location of constants.xq when working locally :)
 (: import module namespace const = 'http://further.utah.edu/constants' 
-    at '../fqe/further/xq/constants.xq'; :)
+    at '../common/constants.xq'; :)
 import module namespace const = 'http://further.utah.edu/constants' 
        at '${server.mdr.ws}${path.mdr.ws.resource.path}/fqe/further/xq/constants.xq';
+
+(: Optional Functx Module :)
+(: import module namespace functx = 'http://www.functx.com' 
+    at 'functx.xqm'; :)
 
 (: ALWAYS Define Namespaces in XQUERY PROLOG! :)
 declare namespace fn  = 'http://www.w3.org/2005/xpath-functions';
@@ -45,7 +51,10 @@ declare variable $fqt:FURTHER as xs:string := '32769';
 (: We are using SNOMED (Namespace ID 30) for ObservationType Values :)
 declare variable $fqt:SNOMED as xs:string := '30';
 
-@DSCUSTOM-16@
+(: OMOP has a special case where ICD-9 needs to be translated to SNOMED first, 
+   before translating to OMOP-V2 
+   SNOMED uses the Standard 'Code in Source' Property Name :)
+declare variable $fqt:OMOP-V2 as xs:string := '32868';
 declare variable $fqt:ICD-9 as xs:string := '10';
 declare variable $fqt:LOINC as xs:string := '5102';
 
@@ -69,6 +78,7 @@ declare variable $fqt:ZERO as xs:string := '0';
 
 (: General Delimiter :)
 declare variable $fqt:DELIMITER as xs:string := '^';
+declare variable $fqt:STATIC as xs:string := 'STATIC';
 
 (: MDR Static Property Names CASE SENSITIVE! :)
 declare variable $fqt:ATTR_TRANS_FUNC as xs:string := 'ATTR_TRANS_FUNC';
@@ -109,10 +119,13 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   
   (: Call insertObsType :)
   let $obsTypeInput := fqt:insertObsType($initializedInput)
-
-  let $translatedCriteriaPhrase := fqt:transCriteriaPhrase($obsTypeInput,$targetNamespaceId)
   
-@DSCUSTOM-17@
+  (: Call preTransOMOP Special Case :)
+  (: Possibly make preTranslations Generic (MDR Driven) to ALL Data Sources in the Future :)
+  let $preTranslatedOMOP := fqt:preTransOMOP($obsTypeInput,$targetNamespaceId)
+  
+  (: Call transCriteriaPhrase :)
+  let $translatedCriteriaPhrase := fqt:transCriteriaPhrase($preTranslatedOMOP,$targetNamespaceId)
     
   (: Call transSingleCriteria :)
   let $translatedSingleCriteria := fqt:transSingleCriteria($translatedCriteriaPhrase,$targetNamespaceId)
@@ -120,9 +133,8 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   (: Call transAlias :)
   let $translatedAlias := fqt:transAlias($translatedSingleCriteria,$targetNamespaceId)
 
-  (: Call updatedParmAlias :)
   let $updatedParmAlias := fqt:updateParmAlias($translatedAlias)
-
+  
   (: Call transRoot :)
   let $translatedRoot := fqt:transRoot($updatedParmAlias,$targetNamespaceId)
   
@@ -139,6 +151,7 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   let $cleaned := fqt:cleanup($validated)
   
   (: Return Final Cleaned Version :)
+  (: return $debug :)
   return $cleaned
   
 };
@@ -320,15 +333,15 @@ modify (
            let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
            
            (: DEBUG :)
-           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
+           let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId)
            (: let $mdrTranslatedAttrName := 'Translated MDR Parm2 Name' :)
            
            return (
             
-             (: DEBUG 
+             (: DEBUG
              replace value of node $c/fq:parameters/fq:parameter[2] 
                 with $mdrURL :)
-  
+
              (: if there is a Result, ALWAYS Set translatedAttrName (Except for SKIP) :)
              (: The datatype for attribute name is always String, 
                 so there is no need for that Translation :)
@@ -341,7 +354,10 @@ modify (
                else if ($mdrResult/translatedAttribute=$fqt:devNull) then
                  replace value of node $c/@mdrFlag with $fqt:ERROR
                else
+               
+                 (: Get the Translated Attribute :)
                  let $translatedAttrName := $mdrResult/translatedAttribute/text()
+                 
                  return (
                    replace value of node $c/fq:parameters/fq:parameter[2]
                       with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
@@ -419,6 +435,10 @@ modify (
                let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
                
                return
+                 (: DEBUG
+                 replace value of node $c/fq:parameters/fq:parameter[3]
+                      with $dtsURL :)
+                 
                  if ($translatedPropVal) then (
                    replace value of node $c/fq:parameters/fq:parameter[3]
                       with $translatedPropVal
@@ -431,6 +451,7 @@ modify (
                    (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
                    insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[3]
                  )
+                 
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
@@ -439,7 +460,7 @@ modify (
                  replace value of node $c/fq:parameters/fq:parameter[3]
                     with fqt:ageToBirthYear($srcVal)
              else()
-             
+            
              , (: Determine if we need to Translate the DataType :)
              (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
              (: Try ask Rick, maybe it is currently hard coded :)
@@ -1448,13 +1469,27 @@ declare function fqt:getAlias($mdrResponse,$outerIndex,$oldAliasKey,$tgNmspcId)
   (: There can be more than one Object Assocations :)
   for $assoc at $innerIndex in $mdrResponse/assetAssociation[rightNamespace=$tgNmspcName]
     
-    (: Create composite Index to Ensure it is Unique Since sometimes there could be multiple assocations :)
+    (: Create composite Index to Ensure it is Unique Since sometimes there could be multiple assocations
+       We make each alias unique so we can better track each translated alias
+       and we can treat each observation type differently during the updateParmAlias function.
+       However, sometimes we may want to have Static Alias Key Values.
+       Therefore, we have introduced the STATIC^Value Alias Key format. :)
+    
     let $compositeIndex := concat($outerIndex,$innerIndex)
 
     (: Each Table Association MUST have MDR PROPERTIES for ONE Key & Value Pair :)
     let $mdrAssocObject := $assoc/rightAsset/text()
     for $entry in $assoc/properties/entry[key='ALIAS_KEY']
-      let $mdrKey := <key>{concat( $entry/value/text(), $compositeIndex )}</key>
+      (: pwkm 20150211
+         Allow for Static Alias Keys for some External Data Sources.
+         if static, use static MDR value, else use dynamic compositeIndex :)
+      (: let $mdrKey := <key>{concat( $entry/value/text(), $compositeIndex )}</key> :)
+      let $mdrKey := 
+        if ( fn:contains($entry/value/text(), fn:concat($fqt:STATIC,$fqt:DELIMITER) ) ) then
+           <key>{fn:tokenize($entry/value/text(),'\^')[last()]}</key>
+        else
+          <key>{concat( $entry/value/text(), $compositeIndex )}</key>
+
     for $entry in $assoc/properties/entry[key='ALIAS_VALUE']
       let $mdrValue := <value>{$entry/value/text()}</value>
 
@@ -1574,6 +1609,8 @@ return $inputCopy
 
 (:==================================================================:)
 (: Translate Criteria Phrase                                        :)
+(: A Phrase consists of a group of criteria
+   e.g. coded value that belongs to a coding terminology standard   :)
 (:==================================================================:)
 declare function fqt:transCriteriaPhrase($inputXML as document-node(), 
                                          $targetNamespaceId as xs:string){
@@ -1653,7 +1690,117 @@ return $inputCopy
 };
 
 
-@DSCUSTOM-22@
+(:==================================================================:)
+(: preTransOMOP                                                     :)
+(: Pre-Translate ICD-9 Codes into SNOMED for OMOP Target ONLY!      :)
+(: Since DTS Maps from ICD-9 to SNOMED, then to OMOP                :)
+(: In the ideal world, if ICD-9 mapped to OMOP Directly             :)
+(: we would not need this custom special function.                  :)
+(:==================================================================:)
+declare function fqt:preTransOMOP($inputXML as document-node(),
+                                  $targetNamespaceId as xs:string)
+{
+copy $inputCopy := $inputXML
+modify (
+
+  (: For OMOP Targets ONLY! :)
+  if ($targetNamespaceId = $fqt:OMOP-V2) then 
+
+    (: Find Each ICD-9 Value :)
+    for $criteriaGroup in $inputCopy//*[fq:searchType/text()='CONJUNCTION' 
+                                        and fq:criteria[fq:searchType/text()='SIMPLE' 
+                                        and fn:contains(fq:parameters/fq:parameter[2]/text(),'observationNamespaceId')
+                                        and fq:parameters/fq:parameter[3]/text()=$fqt:ICD-9]]
+       
+      return (
+      
+      (: Replace NamespaceId to SNOMED :)
+      for $criteria in $criteriaGroup/fq:criteria[fn:contains(fq:parameters/fq:parameter[2]/text(),'observationNamespaceId')]
+        return replace value of node $criteria/fq:parameters/fq:parameter[3] with $fqt:SNOMED
+
+      , (: Do more Stuff :)
+      
+      (: Note that ICD-9 Codes ONLY Occur in 'SIMPLE', or 'IN' searchTypes :)
+      
+      (: Strip out the observation value for SIMPLE searchType :)
+      for $criteria in $criteriaGroup/fq:criteria[fn:tokenize(fq:parameters/fq:parameter[2],'\.')[last()] = 'observation'
+                                                  and fq:searchType='SIMPLE']
+        
+        (: Get Source Attribute Text and Value :)
+        let $sourceAttrText := $criteria/fq:parameters/fq:parameter[2]
+        let $dtsSrcPropVal := $criteria/fq:parameters/fq:parameter[3]
+
+        (: Call DTS :)
+        let $dtsResponse := further:getTranslatedConcept($fqt:ICD-9,
+                                                         $fqt:dtsSrcPropNm,
+                                                         $dtsSrcPropVal,
+                                                         $fqt:SNOMED,
+                                                         $fqt:dtsSrcPropNm)
+                                                         
+        (: Debug DTS URL :)
+        (:let $dtsURL := further:getConceptTranslationRestUrl($fqt:ICD-9,
+                                                            $fqt:dtsSrcPropNm,
+                                                            $dtsSrcPropVal,
+                                                            $fqt:SNOMED,
+                                                            $fqt:dtsSrcPropNm):)
+       
+        let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
+        
+        (: if there is a response :)
+        return
+        if ($translatedPropVal) then
+          replace value of node $criteria/fq:parameters/fq:parameter[3] with $translatedPropVal
+        else (
+          (: Mark for Error so we do not Translate Again in transCriteria Function :)
+          replace value of node $criteria/fq:parameters/fq:parameter[3]/@dtsFlag with $fqt:ERROR,
+          insert node attribute sourceAttrText {$sourceAttrText} into $criteria/fq:parameters/fq:parameter[3]
+        )
+          
+      , (: Do more Stuff :)
+
+      (: Strip out the observation value for IN searchType :)
+      for $criteria in $criteriaGroup/fq:criteria[fn:tokenize(fq:parameters/fq:parameter[1],'\.')[last()] = 'observation'
+                                                  and fq:searchType='IN']
+
+        (: Get Source Attribute Name :)
+        let $sourceAttrText := $criteria/fq:parameters/fq:parameter[1]
+
+        (: For Parameters greater than the first position :)
+        for $parm in $criteria/fq:parameters/fq:parameter[position()>1]
+
+          (: Call DTS :)
+          let $dtsResponse := further:getTranslatedConcept($fqt:ICD-9,
+                                                           $fqt:dtsSrcPropNm,
+                                                           $parm,
+                                                           $fqt:SNOMED,
+                                                           $fqt:dtsSrcPropNm)
+
+          (: Debug DTS URL :)
+          (:let $dtsURL := further:getConceptTranslationRestUrl($fqt:ICD-9,
+                                                              $fqt:dtsSrcPropNm,
+                                                              $parm,
+                                                              $fqt:SNOMED,
+                                                              $fqt:dtsSrcPropNm):)
+
+          let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
+        
+          (: if there is a response :)
+          return
+          if ($translatedPropVal) then
+            replace value of node $parm with $translatedPropVal
+          else (
+            (: Mark for Error so we do not Translate Again in transCriteria Function :)
+            replace value of node $parm/@dtsFlag with $fqt:ERROR,
+            insert node attribute sourceAttrText {$sourceAttrText} into $parm
+          )
+        
+    ) (: End Return :)
+
+  else( (: DO NOTHING if Target is NOT OMOP :) )
+    
+) (: End Modify :)
+return $inputCopy
+};
 
 
 (:=====================================================================:)

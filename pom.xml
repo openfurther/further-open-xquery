@@ -106,7 +106,7 @@
 					<argLine />
 					<includes>
 						<!-- Integration test class naming pattern -->
-						<include>**/ITest*.java</include>
+						<include>**/SKIPITest*.java</include>
 					</includes>
 					<excludes>
 						<!-- Anything that matches the following is a test suite run in an 

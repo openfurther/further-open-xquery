@@ -233,6 +233,7 @@ declare function fqt:transSingleCriteria($inputXML as document-node(),
 
   (: We can do the above 3 things in 2 Transformation steps :)
   (: We need to separate the Transformations because the Pending Update List will Conflict with each other :)
+  
 
 (: BEGIN FIRST XQUERY TRANSFORMATION :)
 (: Make a copy of the entire Document :)
@@ -245,18 +246,33 @@ modify (
   (:  return :)
   (:  replace node $criteria with <MO_DEBUG_SINGLE_CRITERIA>{$criteria}</MO_DEBUG_SINGLE_CRITERIA> :)
 
-  (: For Criterias that are NOT SubQuery Outer Criteria :)
-  (: Meaning all the Atomic (No Children) Criterias :)
+  (: For Criterias that are NOT SubQuery OUTER Criteria :)
+  (: Meaning all the Atomic (No Children) Criterias, but INCLUDING subQuery ATOMIC criteria nodes :)
   for $atomicCriteria in $inputCopy//fq:criteria[@transFlag=$fqt:NO and not(fq:query)]
     (: DEBUG :)
     (: return replace value of node $atomicCriteria/@transFlag with 'MO' :)
-    return
-      replace node $atomicCriteria with
-      fqt:transCriteria($atomicCriteria,$fqt:FURTHER,$targetNamespaceId,$fqt:EMPTY,$fqt:EMPTY)
+    
+    return 
+      (: pwkm 20150506 
+         Sometimes even Single Criteria has obsType!
+         So we need to look for it, before processing criteria. :)
+      if ($atomicCriteria//fq:parameter[@obsType]) then 
+        let $obsType := fn:data($atomicCriteria//fq:parameter/@obsType)[1]
+        return (
+          (: pwkm 20150506 DEBUG
+          fqt:printDebug($obsType,'obsType')
+          ,
+          :)
+          replace node $atomicCriteria with
+            fqt:transCriteria($atomicCriteria,$fqt:FURTHER,$targetNamespaceId,$obsType,$fqt:SNOMED)
+        )
+      else
+        replace node $atomicCriteria with
+          fqt:transCriteria($atomicCriteria,$fqt:FURTHER,$targetNamespaceId,$fqt:EMPTY,$fqt:EMPTY)
 
-)
+) (: END First Transformation :)
+
 (: Return to a Second Transformation :)
-
 return
 (: BEGIN Second XQUERY TRANSFORMATION :)
 (: Make a copy of the First Document :)
@@ -264,19 +280,25 @@ copy $inputCopy2 := $inputCopy
 modify (
   
   (: IMPORTANT!!! Use this FLWOR to DEBUG the Single Criteria :)
-  (: The Single Criteria may contain an ENTIRE SubQuery! :)
-  (: for $criteria in $inputCopy2//fq:criteria[@transFlag = "N"] :)
+  (: The Single Criteria may contain an ENTIRE SubQuery! 
+     However, we are only interested in the OUTER criteria parameter in each SubQuery,
+     because the first Transformation has already taken care of all atomic criteria nodes,
+     including subQuery criteria nodes. :)
+     
+  (: for $criteria in $inputCopy2//fq:criteria[@transFlag=$fqt:NO and fq:query] :)
   (:  return :)
-  (:  replace node $criteria with <MO_DEBUG_SINGLE_CRITERIA>{$criteria}</MO_DEBUG_SINGLE_CRITERIA> :)
+  (:  replace node $criteria with <DEBUG_SINGLE_CRITERIA>{$criteria}</DEBUG_SINGLE_CRITERIA> :)
   
   (: Process the Outer Criteria for each SubQuery :)
   for $subQueryCriteria in $inputCopy2//fq:criteria[@transFlag=$fqt:NO and fq:query]
     (: DEBUG :)
-    (: return replace value of node $subQueryCriteria/@transFlag with 'MO' :)
+    (: return replace value of node $subQueryCriteria/@transFlag with 'DEBUG' :)
     return
+      (: pwkm 20150506 
+         Currently, the outer Criteria within each subQuery do not have obsType!
+         So we do not need to worry about obsType here. :)
       replace node $subQueryCriteria with
-      fqt:transCriteria($subQueryCriteria,$fqt:FURTHER,$targetNamespaceId,$fqt:EMPTY,$fqt:EMPTY)
-
+        fqt:transCriteria($subQueryCriteria,$fqt:FURTHER,$targetNamespaceId,$fqt:EMPTY,$fqt:EMPTY)
 )
 return $inputCopy2
 
@@ -493,10 +515,27 @@ modify (
   
            (: Call MDR Web Service to Translate Attribute Name HERE :)
            let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
-           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-           (: let $translatedAttrName := 'Translated MDR Name' :)
-  
+           
+           (: pwkm DEBUG :)
+           let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId)
+           
+           
+           
            return (
+             
+             (: pwkm DEBUG 
+             replace value of node $c/fq:parameters/fq:parameter[1] 
+                with $mdrURL :)
+                
+             (: pwkm DEBUG 
+             replace value of node $c/fq:parameters/fq:parameter[1] 
+                with $mdrResult :)
+             
+             (: pwkm DEBUG 
+             replace value of node $c/fq:parameters/fq:parameter[1] 
+                with $criteriaType :)
+
+
              (: if there is a Result, ALWAYS Set translatedAttrName :)
              (: The datatype for attribute name is always String, 
                 so there is no need for that Translation :)
@@ -545,6 +584,8 @@ modify (
                (: replace value of node $c/fq:parameters/fq:parameter[1]
                   with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
              )
+             
+
              
              , (: Process Code Translation Next Parameters 2 & 3 :)
   
@@ -621,6 +662,13 @@ modify (
                  replace value of node $c/fq:parameters/fq:parameter[3]
                     with fqt:ageToBirthYear($srcValue2)
                )
+             
+             
+             
+             (: May Add year-from-dateTime function here :)
+             
+             
+             
              
              else()
                
@@ -1404,6 +1452,8 @@ declare function fqt:getMDRAttrURL(
 
 (:==================================================================:)
 (: printDebug = Print Debug Variable to Query Info Screen           :)
+(: The Second msg Argument is Optionally Blank                      :)
+(: Usage: fqt:printDebug($debugVar, $fqt:EMPTY)                     :)
 (:==================================================================:)
 declare function fqt:printDebug($debugVar,$msg as xs:string?)
 {

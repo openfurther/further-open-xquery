@@ -6,11 +6,11 @@
 	<parent>
 		<groupId>edu.utah.further</groupId>
 		<artifactId>further</artifactId>
-		<version>1.4.3-SNAPSHOT</version>
+		<version>1.4.4-SNAPSHOT</version>
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<artifactId>xquery-open-artifacts</artifactId>
-        <version>1.4.3-SNAPSHOT</version>
+        <version>1.4.4-SNAPSHOT</version>
 	<packaging>jar</packaging>
 	<name>OpenFurther XQuery Artifacts</name>
 	<description>OpenFurther XQuery Artifacts</description>

@@ -76,9 +76,14 @@ declare variable $fqt:ERROR as xs:string := 'E';
 (: Placeholder in case preTranslation Fails :)
 declare variable $fqt:ZERO as xs:string := '0';
 
-(: General Delimiter :)
+(: General Delimiter and Other General Use Cases :)
 declare variable $fqt:DELIMITER as xs:string := '^';
 declare variable $fqt:STATIC as xs:string := 'STATIC';
+declare variable $fqt:CUSTOM as xs:string := 'CUSTOM';
+declare variable $fqt:INVALID_CUSTOM_FUNCTION as xs:string := 'INVALID_CUSTOM_FUNCTION: ';
+
+(: Arity = number of arguments for Dynamic Function Calls:)
+declare variable $fqt:GLOBAL_ARITY as xs:integer := 1;
 
 (: MDR Static Property Names CASE SENSITIVE! :)
 declare variable $fqt:ATTR_TRANS_FUNC as xs:string := 'ATTR_TRANS_FUNC';
@@ -328,7 +333,7 @@ modify (
   return
     switch ($searchType)
       case 'SIMPLE' 
-        (: Parameter[2]=Attribute Name, 3 = Attribute Value :)
+        (: parameter[2]=Attribute Name, parameter[3]=Attribute Value :)
         (: return ($criteria/parameters/parameter[2],$criteria/parameters/parameter[3]) :)
         return (
  
@@ -477,11 +482,71 @@ modify (
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
-               let $srcVal := $c/fq:parameters/fq:parameter[3]/text()  
+               let $srcVal := $c/fq:parameters/fq:parameter[3]/text()
+
+               (: Call Static Custom Function :)
+               let $translatedValue := fqt:ageToBirthYear($srcVal)
+               
                return
-                 replace value of node $c/fq:parameters/fq:parameter[3]
-                    with fqt:ageToBirthYear($srcVal)
-             else()
+               
+                 if ($translatedValue) then (
+                   replace value of node $c/fq:parameters/fq:parameter[3]
+                      with $translatedValue,
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag 
+                      with $fqt:CUSTOM
+                 )
+                 else ( (: Error Handling :)
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                      with $fqt:ERROR,
+                   insert node attribute sourceAttrText {$sourceAttrText}
+                     into $c/fq:parameters/fq:parameter[3]
+                 )
+
+             else (: Process Custom Functions Dynamically Here :)
+               for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:CUSTOM)]
+                
+                 (: Get Custom Function Name :)
+                 let $customFuncName := fn:substring-after($entry/value/text(),$fqt:DELIMITER)
+              
+                 (: Get Function Handle :)
+                 let $funcHandle := fn:function-lookup(xs:QName($customFuncName),$fqt:GLOBAL_ARITY)
+
+                 return 
+                   (: Ensure Function Name is Valid :)
+                   if (fn:empty($funcHandle)) then (
+                     
+                     (: Error Handling :)
+                     replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                        with $fqt:ERROR,
+                     insert node attribute sourceAttrText {$sourceAttrText}
+                       into $c/fq:parameters/fq:parameter[3],
+                     replace value of node $c/fq:parameters/fq:parameter[3]
+                        with fn:concat($fqt:INVALID_CUSTOM_FUNCTION,$customFuncName)
+                   )
+                   else (: Process Dynamic Function Call :)
+                   
+                     (: Get the Source Value to be Translated :)
+                     let $srcValue := $c/fq:parameters/fq:parameter[3]/text()
+                     
+                     (: Call Dynamic Function, passing 1 Argument :)
+                     let $translatedValue := $funcHandle($srcValue)
+
+                     (: Replace Query Value with Translated Values :)
+                     return (
+                       if ($translatedValue) then (
+                         replace value of node $c/fq:parameters/fq:parameter[3]
+                            with $translatedValue,
+                         replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag 
+                            with $fqt:CUSTOM
+                       )
+                       else( 
+                         (: Error Handling :)
+                         replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                           with $fqt:ERROR,
+                         insert node attribute sourceAttrText {$sourceAttrText}
+                           into $c/fq:parameters/fq:parameter[3]
+                       )
+                     )
             
              , (: Determine if we need to Translate the DataType :)
              (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
@@ -518,15 +583,13 @@ modify (
            
            (: pwkm DEBUG :)
            let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId)
-           
-           
-           
+
            return (
              
-             (: pwkm DEBUG 
+             (: pwkm DEBUG
              replace value of node $c/fq:parameters/fq:parameter[1] 
                 with $mdrURL :)
-                
+                          
              (: pwkm DEBUG 
              replace value of node $c/fq:parameters/fq:parameter[1] 
                 with $mdrResult :)
@@ -534,7 +597,6 @@ modify (
              (: pwkm DEBUG 
              replace value of node $c/fq:parameters/fq:parameter[1] 
                 with $criteriaType :)
-
 
              (: if there is a Result, ALWAYS Set translatedAttrName :)
              (: The datatype for attribute name is always String, 
@@ -584,14 +646,15 @@ modify (
                (: replace value of node $c/fq:parameters/fq:parameter[1]
                   with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
              )
-             
 
-             
-             , (: Process Code Translation Next Parameters 2 & 3 :)
+             , (: Process DTS Coded Value Translation Next Parameters 2 & 3 :)
   
              (: Determine if we need to Call DTS to Translate Coded Value :)
-             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
-             
+             (: Skip the parameters with preTranslation Errors :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]
+                                         and $c/fq:parameters/fq:parameter[2]/@dtsFlag!=$fqt:ERROR
+                                         and $c/fq:parameters/fq:parameter[3]/@dtsFlag!=$fqt:ERROR) then
+
                let $dtsSrcPropVal2 := $c/fq:parameters/fq:parameter[2]/text()
                let $dtsSrcPropVal3 := $c/fq:parameters/fq:parameter[3]/text()
                                
@@ -648,30 +711,116 @@ modify (
                  )
   
                ) (: End Replace Return :)
-               
+
+             
+             (: ageToBirthYear is a special case function, because the second and third parameters
+                need to be flipped around. :)
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
                let $srcValue2 := $c/fq:parameters/fq:parameter[2]/text()
                let $srcValue3 := $c/fq:parameters/fq:parameter[3]/text()
   
-               (: Reverse the Order of 2 & 3 for this Special Case Since the Smaller BirthYear Must come First :)                        
+               (: Call Static Custom Function :)
+               let $translatedValue2 := fqt:ageToBirthYear($srcValue2)
+               let $translatedValue3 := fqt:ageToBirthYear($srcValue3)
+
                return (
-                 replace value of node $c/fq:parameters/fq:parameter[2]
-                    with fqt:ageToBirthYear($srcValue3),
-                 replace value of node $c/fq:parameters/fq:parameter[3]
-                    with fqt:ageToBirthYear($srcValue2)
+
+                 if ($translatedValue2 and $translatedValue3) then (
+                   (: Reverse the Order of 2 & 3 for this Special Case 
+                      Since the Smaller BirthYear Must come First! :)
+                   replace value of node $c/fq:parameters/fq:parameter[2]
+                      with $translatedValue3,
+                   replace value of node $c/fq:parameters/fq:parameter[3]
+                      with $translatedValue2
+                 )
+                 else ( (: Error Handling :)
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                      with $fqt:ERROR,
+                   insert node attribute sourceAttrText {$sourceAttrText} 
+                     into $c/fq:parameters/fq:parameter[2],
+                   replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                      with $fqt:ERROR,
+                   insert node attribute sourceAttrText {$sourceAttrText}
+                     into $c/fq:parameters/fq:parameter[3]
+                 )
+                 
                )
              
-             
-             
-             (: May Add year-from-dateTime function here :)
-             
-             
-             
-             
-             else()
-               
+             else (: Process Custom Functions Dynamically Here :)
+               for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:CUSTOM)]
+                
+                 (: Get Custom Function Name :)
+                 let $customFuncName := fn:substring-after($entry/value/text(),$fqt:DELIMITER)
+              
+                 (: Get Function Handle :)
+                 let $funcHandle := fn:function-lookup(xs:QName($customFuncName),$fqt:GLOBAL_ARITY)
+                 
+                 return 
+                   (: Ensure Function Name is Valid :)
+                   if (fn:empty($funcHandle)) then (
+                     
+                     (: Error Handling :)
+                     replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                        with $fqt:ERROR,
+                     replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                        with $fqt:ERROR,
+                     insert node attribute sourceAttrText {$sourceAttrText} 
+                       into $c/fq:parameters/fq:parameter[2],
+                     insert node attribute sourceAttrText {$sourceAttrText}
+                       into $c/fq:parameters/fq:parameter[3],
+                     replace value of node $c/fq:parameters/fq:parameter[2]
+                        with fn:concat($fqt:INVALID_CUSTOM_FUNCTION,$customFuncName),
+                     replace value of node $c/fq:parameters/fq:parameter[3]
+                        with fn:concat($fqt:INVALID_CUSTOM_FUNCTION,$customFuncName)
+                   )
+                   else (: Process Dynamic Function :)
+                   
+                     (: Get the Source Value to be Translated :)
+                     let $srcValue2 := $c/fq:parameters/fq:parameter[2]/text()
+                     let $srcValue3 := $c/fq:parameters/fq:parameter[3]/text()
+                     
+                     (: Call Function, passing 1 Argument :)
+                     let $translatedValue2 := $funcHandle($srcValue2)
+                     let $translatedValue3 := $funcHandle($srcValue3)
+
+                     (: DEBUG Call to Test :)
+                     (:
+                     let $translatedValue2 := fqt:yearFromDateTime('2006-01-01T00:00:00-07:00')
+                     let $translatedValue3 := fqt:yearFromDateTime('2015-05-06T00:00:00-06:00')
+                     :)
+                     
+                     (: Replace Query Value with Translated Values :)
+                     return (
+                       if ($translatedValue2) then (
+                         replace value of node $c/fq:parameters/fq:parameter[2]
+                            with $translatedValue2,
+                         replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                            with $fqt:CUSTOM
+                       )
+                       else(
+                         replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                            with $fqt:ERROR,
+                         insert node attribute sourceAttrText {$sourceAttrText} 
+                           into $c/fq:parameters/fq:parameter[2]
+                       )
+                       ,
+                       if ($translatedValue3) then (
+                         replace value of node $c/fq:parameters/fq:parameter[3]
+                            with $translatedValue3,
+                         replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                            with $fqt:CUSTOM
+                       )
+                       else(
+                         replace value of node $c/fq:parameters/fq:parameter[3]/@dtsFlag
+                            with $fqt:ERROR,
+                         insert node attribute sourceAttrText {$sourceAttrText}
+                           into $c/fq:parameters/fq:parameter[3]
+                       )
+                     )
+
+
              , (: Determine if we need to Translate the DataType :)
              (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
              (: Try ask Rick, maybe it is currently hard coded :)
@@ -693,8 +842,8 @@ modify (
            
          ) (: End BETWEEN Return :)
                   
-       case 'LIKE' 
-         (: Parameter[1]=Attribute Name, Parameter[2] = Attribute Value :)
+       case 'LIKE'
+         (: Parameter[1]=Attribute Name, Parameter[2]=Attribute Value :)
          return (
   
            (: Get the Source Attribute Name :)
@@ -709,10 +858,11 @@ modify (
            let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
            let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()]
            :)
+           
            (: Call MDR Web Service to Translate Attribute Name HERE :)
            let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
            (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-           (: let $translatedAttrName := 'Translated MDR Name' :)
+           
            return (
              if ($mdrResult/.[translatedAttribute]) then 
              
@@ -763,7 +913,9 @@ modify (
              , (: Comma to Separate Sequence Items :)
   
              (: Determine if we need to Call DTS to Translate Coded Value :)
-             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
+             (: Skip the parameters with preTranslation Errors :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]
+                                         and $c/fq:parameters/fq:parameter[2]/@dtsFlag!=$fqt:ERROR) then
              
                let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[2]/text()
                
@@ -775,44 +927,92 @@ modify (
                                                                 $fqt:dtsTgPropName)
                (: Debug DTS URL :)
                (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
-                                                                   $fqt:dtsSrcPropNm,
-                                                                   $dtsSrcPropVal,
-                                                                   $tgNamespaceId,
-                                                                   $fqt:dtsTgPropName) :)
-                                                                
-               (: let $dtsResponse := fqt:getDTSAttrValue($srcNamespaceId,$fqt:dtsSrcPropNm,$dtsSrcPropVal,$tgNamespaceId,$fqt:dtsTgPropName) :)
-               (: let $translatedPropVal := 'Translated MDR Parm3 Value' :)
-               
-               (: let $debug := concat($srcNamespaceId,'|',
-                                    $fqt:dtsSrcPropNm,'|',
-                                    $dtsSrcPropVal,'|',
-                                    $tgNamespaceId,'|',
-                                    $fqt:dtsTgPropName) :)
-                                    
+                                                                      $fqt:dtsSrcPropNm,
+                                                                      $dtsSrcPropVal,
+                                                                      $tgNamespaceId,
+                                                                      $fqt:dtsTgPropName) :)
+
                (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
                let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
                
                return
                  if ($translatedPropVal) then (
                    replace value of node $c/fq:parameters/fq:parameter[2]
-                      with $translatedPropVal
-                   ,
-                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:YES
+                      with $translatedPropVal,
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                      with $fqt:YES
                  )
                  else (
-                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag with $fqt:ERROR,
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                      with $fqt:ERROR,
                    (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
-                   insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[2]
+                   insert node attribute sourceAttrText {$sourceAttrText}
+                     into $c/fq:parameters/fq:parameter[2]
                  )
+                 
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
                (: Get the Source Value to be Translated :)
                let $srcVal := $c/fq:parameters/fq:parameter[2]/text()
+               let $translatedValue := fqt:ageToBirthYear($srcVal)
                return
-                 replace value of node $c/fq:parameters/fq:parameter[2]
-                    with fqt:ageToBirthYear($srcVal)
+                 if ($translatedValue) then (
+                   replace value of node $c/fq:parameters/fq:parameter[2]
+                      with $translatedValue,
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                      with $fqt:CUSTOM
+                 )
+                 else( (: Error Handling :)
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                      with $fqt:ERROR,
+                   insert node attribute sourceAttrText {$sourceAttrText}
+                     into $c/fq:parameters/fq:parameter[2]
+                 )
   
-             else()
+             else (: Process Custom Functions Dynamically Here :)
+               for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:CUSTOM)]
+                
+                 (: Get Custom Function Name :)
+                 let $customFuncName := fn:substring-after($entry/value/text(),$fqt:DELIMITER)
+              
+                 (: Get Function Handle :)
+                 let $funcHandle := fn:function-lookup(xs:QName($customFuncName),$fqt:GLOBAL_ARITY)
+
+                 return 
+                   (: Ensure Function Name is Valid :)
+                   if (fn:empty($funcHandle)) then (
+                     
+                     (: Error Handling :)
+                     replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                        with $fqt:ERROR,
+                     insert node attribute sourceAttrText {$sourceAttrText}
+                       into $c/fq:parameters/fq:parameter[2],
+                     replace value of node $c/fq:parameters/fq:parameter[2]
+                        with fn:concat($fqt:INVALID_CUSTOM_FUNCTION,$customFuncName)
+                   )
+                   else (: Process Dynamic Function Call :)
+                   
+                     (: Get the Source Value to be Translated :)
+                     let $srcValue := $c/fq:parameters/fq:parameter[2]/text()
+                     
+                     (: Call Dynamic Function, passing 1 Argument :)
+                     let $translatedValue := $funcHandle($srcValue)
+
+                     (: Replace Query Value with Translated Values :)
+                     return (
+                       if ($translatedValue) then (
+                         replace value of node $c/fq:parameters/fq:parameter[2]
+                            with $translatedValue,
+                         replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                            with $fqt:CUSTOM
+                       )
+                       else( (: Error Handling :)
+                         replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                           with $fqt:ERROR,
+                         insert node attribute sourceAttrText {$sourceAttrText}
+                           into $c/fq:parameters/fq:parameter[2]
+                       )
+                     )
              
              , (: Determine if we need to Translate the DataType :)
              (: WHY IS THERE NO ATTR_VALUE_TRANS_TO_DATA_TYPE in the MDR for the Attributes that NEEDS it! :)
@@ -848,6 +1048,7 @@ modify (
            let $sourceAttrText := $c/fq:parameters/fq:parameter[1]/text()
            let $sourceAttrName := fn:tokenize($sourceAttrText,'\.')[last()]
            :)
+           
            (: Call MDR Web Service to Translate Attribute Name HERE :)
            let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
            return (
@@ -899,69 +1100,104 @@ modify (
   
              , (: Process DTS Stuff :)
              (: Determine if we need to Call DTS to Translate Coded Value :)
-             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then 
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then
   
                (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
                (: The first parameter is the Attribute Name, the rest are Attribute Values :)
-               (: Skip the parameters with preTranslation Errors :)
+               (: Skip the parameters with preTranslation Errors Here (Not if statement above) :)
                for $parm in $c/fq:parameters/fq:parameter[position()>1 and @dtsFlag!=$fqt:ERROR]
-                 
-                 (:return
-                 
-                   if ($index>1) then 
-                   
-                     let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[$index]/text():)
-                   
-                     (: Call DTS :)
-                     let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
-                                                                      $fqt:dtsSrcPropNm,
-                                                                      $parm,
-                                                                      $tgNamespaceId,
-                                                                      $fqt:dtsTgPropName)
-                     (: Debug DTS URL :)
-                     (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
-                                                                         $fqt:dtsSrcPropNm,
-                                                                         $parm,
-                                                                         $tgNamespaceId,
-                                                                         $fqt:dtsTgPropName) :)
+
+                 (: Call DTS with $parm = dtsSrcPropVal :)
+                 let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
+                                                                  $fqt:dtsSrcPropNm,
+                                                                  $parm,
+                                                                  $tgNamespaceId,
+                                                                  $fqt:dtsTgPropName)
+                 (: Debug DTS URL :)
+                 (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
+                                                                        $fqt:dtsSrcPropNm,
+                                                                        $parm,
+                                                                        $tgNamespaceId,
+                                                                        $fqt:dtsTgPropName) :)
                                                                  
-                     let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
-                   
-                     return
-                     
-                       (: DEBUG URL :)
-                       (: replace value of node $parm with $dtsURL :)
+                 let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
+               
+                 return
+                  
+                 (: DEBUG URL :)
+                 (: replace value of node $parm with $dtsURL :)
                        
-                       if ($translatedPropVal) then (
-                         replace value of node $parm with $translatedPropVal
-                         ,
-                         replace value of node $parm/@dtsFlag with $fqt:YES
-                       )
-                       else (
-                         replace value of node $parm/@dtsFlag with $fqt:ERROR,
-                         (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
-                         insert node attribute sourceAttrText {$sourceAttrText} into $parm
-                       )
+                   if ($translatedPropVal) then (
+                     replace value of node $parm with $translatedPropVal,
+                     replace value of node $parm/@dtsFlag with $fqt:YES
+                   )
+                   else (
+                     replace value of node $parm/@dtsFlag with $fqt:ERROR,
+                     (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
+                     insert node attribute sourceAttrText {$sourceAttrText} into $parm
+                   )
                        
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
-               (: Get the Source Value to be Translated :)
+               (: The first parameter is the Attribute Name, the rest are Attribute Values.
+                  So we will simply skip the first parameter position. :)
                (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
-               for $param at $index in ($criteria/fq:parameters/*) 
-           
-                 (: The first parameter is the Attribute Name, the rest are Attribute Values :)
-                 return
+               (: Skip the parameters with preTranslation Errors Here (Not if statement above) :)
+               for $parm in $c/fq:parameters/fq:parameter[position()>1 and @dtsFlag!=$fqt:ERROR]
                  
-                   if ($index>1) then
-                     let $srcVal := $c/fq:parameters/fq:parameter[$index]/text()
-                     return
-                       replace value of node $c/fq:parameters/fq:parameter[$index]
-                          with fqt:ageToBirthYear($srcVal)
+                 (: Get the Source Value to be Translated :)
+                 let $srcVal := $parm/text()
+                 let $translatedValue := fqt:ageToBirthYear($srcVal)
+                 return
+                   if ($translatedValue) then (
+                     replace value of node $parm
+                        with $translatedValue,
+                     replace value of node $parm/@dtsFlag
+                        with $fqt:CUSTOM
+                   )
+                   else(
+                     (: Error Handling :)
+                     replace value of node $parm/@dtsFlag
+                        with $fqt:ERROR,
+                     insert node attribute sourceAttrText {$sourceAttrText}
+                           into $parm
+                   )
   
-                   else( (: End Inner IF :) )
-  
-             else( (: End Outter IF :) )
-  
+             else (: Process Custom Functions Dynamically Here :)
+               for $entry in $mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:CUSTOM)]
+                
+                 (: Get Custom Function Name :)
+                 let $customFuncName := fn:substring-after($entry/value/text(),$fqt:DELIMITER)
+              
+                 (: Get Function Handle :)
+                 let $funcHandle := fn:function-lookup(xs:QName($customFuncName),$fqt:GLOBAL_ARITY)
+
+                 (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
+                 (: Skip the parameters with preTranslation Errors Here (Not For statement above) :)
+                 for $parm in $c/fq:parameters/fq:parameter[position()>1 and @dtsFlag!=$fqt:ERROR]
+
+                   (: The first parameter is the Attribute Name, the rest are Attribute Values :)
+                   (: Get the Source Value to be Translated :)
+                   let $srcValue := $parm/text()
+                       
+                   (: Call Dynamic Function, passing 1 Argument :)
+                   let $translatedValue := $funcHandle($srcValue)
+
+                   return
+                     if ($translatedValue) then (
+                       replace value of node $parm
+                          with $translatedValue,
+                       replace value of node $parm/@dtsFlag
+                          with $fqt:CUSTOM
+                     )
+                     else(
+                       (: Error Handling :)
+                       replace value of node $parm/@dtsFlag
+                          with $fqt:ERROR,
+                       insert node attribute sourceAttrText {$sourceAttrText}
+                         into $parm
+                     )
+
            , (: Determine if we need to Translate the DataType :)
            for $entry in $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]
              let $newDataType := $entry/value/text()
@@ -1974,5 +2210,19 @@ modify (
 return $templateCopy
 
 }; (: END OF FUNCTION fqt:fillTemplate :)
+
+
+(:==================================================================:)
+(: yearFromDateTime = Extract 4-digit Year from Argument            :)
+(: Argument can be of dateTime or date or String                    :)
+(:==================================================================:)
+declare function fqt:yearFromDateTime($parm)
+{
+  (: Lets simply take the first 4 characters
+     Since Date or DateTime Format is 2015-05-06T00:00:00-06:00 :)
+  fn:substring($parm,1,4)
+  
+};
+
 
 (: END OF MODULE :)

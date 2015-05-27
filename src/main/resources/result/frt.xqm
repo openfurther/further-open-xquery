@@ -49,6 +49,7 @@ declare variable $frt:SNOMED as xs:string := '30';
 declare variable $frt:OMOP-V2 as xs:string := '32868';
 declare variable $frt:ICD-9 as xs:string := '10';
 declare variable $frt:LOINC as xs:string := '5102';
+declare variable $frt:HL7 as xs:string := '1017';
 
 (: Empty String Value for Substituting Empty Arguments to Functions :)
 declare variable $frt:EMPTY as xs:string := '';
@@ -141,6 +142,9 @@ declare function frt:transResult($inputXML as document-node(),
 
 (:==================================================================:)
 (: createPersonTemplate = Create Person Template XML Format         :)
+(: We are setting some default values here.                         :)
+(: The default values may be replaced in later processing.          :)
+(: e.g. In the initPersonTemplate function.                         :)
 (:==================================================================:)
 declare function frt:createPersonTemplate($extNmspcName as xs:string)
 as document-node()
@@ -152,28 +156,36 @@ document
   <Person centralRootObject="{$frt:EMPTY}" extRootObject="{$frt:EMPTY}">
     <id></id>
     <administrativeGenderNamespaceId>{$frt:SNOMED}</administrativeGenderNamespaceId>
-    <administrativeGender extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></administrativeGender>
+    <administrativeGender extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </administrativeGender>
     <raceNamespaceId>{$frt:SNOMED}</raceNamespaceId>
-    <race extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></race>
+    <race extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </race>
     <ethnicityNamespaceId>{$frt:SNOMED}</ethnicityNamespaceId>
-    <ethnicity extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></ethnicity>
+    <ethnicity extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </ethnicity>
     <dateOfBirth extPath="{$frt:EMPTY}"></dateOfBirth>
     <birthYear extPath="{$frt:EMPTY}"></birthYear>
     <birthMonth extPath="{$frt:EMPTY}"></birthMonth>
     <birthDay extPath="{$frt:EMPTY}"></birthDay>
     <educationLevel extPath="{$frt:EMPTY}"></educationLevel>
     <primaryLanguageNamespaceId>{$frt:SNOMED}</primaryLanguageNamespaceId>
-    <primaryLanguage extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></primaryLanguage>
+    <primaryLanguage extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </primaryLanguage>
     <maritalStatusNamespaceId>{$frt:SNOMED}</maritalStatusNamespaceId>
-    <maritalStatus extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></maritalStatus>
+    <maritalStatus extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </maritalStatus>
     <religionNamespaceId>{$frt:SNOMED}</religionNamespaceId>
-    <religion extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></religion>
+    <religion extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </religion>
     <multipleBirthIndicator extPath="{$frt:EMPTY}"></multipleBirthIndicator>
     <multipleBirthIndicatorOrderNumber extPath="{$frt:EMPTY}"></multipleBirthIndicatorOrderNumber>
     <vitalStatusNamespaceId>{$frt:SNOMED}</vitalStatusNamespaceId>
-    <vitalStatus extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></vitalStatus>
+    <vitalStatus extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </vitalStatus>
     <causeOfDeathNamespaceId>{$frt:SNOMED}</causeOfDeathNamespaceId>
-    <causeOfDeath extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}"></causeOfDeath>
+    <causeOfDeath extPath="{$frt:EMPTY}" dtsTerm="{$frt:SNOMED}" dtsFlag="{$frt:EMPTY}" extPropName="{$frt:LocalCode}">
+    </causeOfDeath>
     <dateOfDeath extPath="{$frt:EMPTY}"></dateOfDeath>
     <deathYear extPath="{$frt:EMPTY}"></deathYear>
     <pedigreeQuality extPath="{$frt:EMPTY}"></pedigreeQuality>
@@ -222,10 +234,32 @@ modify (
       
     , (: DO MORE STUFF :)
     
-    (: Set DTS Translation Instruction from MDR :)
+    (: Get DTS Translation Instruction from MDR :)
     for $dtsAttr in $inputCopy//*[@dtsFlag]
       let $dtsFlag := frt:getDTSFlag(name($dtsAttr),$frt:FURTHeR,$extNmspcName)
       return replace value of node $dtsAttr/@dtsFlag with $dtsFlag
+   
+    , (: DO MORE STUFF :)
+    
+    (: Populate the extPropName XML Attributes in the Template from MDR :)
+    for $centralAttr in $inputCopy//*[@extPropName]
+      
+      let $extPropName := frt:getExtPropName(name($centralAttr),$frt:FURTHeR,$extNmspcName)
+
+      return
+        if ($extPropName) then
+          replace value of node $centralAttr/@extPropName with $extPropName
+        else ( (: Use Default Value :) )
+        
+    (: DO MORE STUFF :)
+    
+    (: We need to get the target Terminology Standard dynamically from MDR in the future.
+       This is just a placeholder for now.
+       This is to support site implementations that use different terminology standards
+       for the Central Data Model.
+       Populate @dtsTerm XML Attributes :)
+    
+        
    
   ) (: End Return :)
   
@@ -385,7 +419,6 @@ modify (
 return
 
 
-
 (: BEGIN XQUERY TRANSFORMATION :)
 copy $transDTS := $transFields
 modify (
@@ -396,16 +429,18 @@ modify (
 
     let $dtsSrcPropVal := $field/text()
     let $tgTerm := $field/@dtsTerm
+    let $dtsSrcPropName := $field/@extPropName
     
     (: Call DTS :)
     let $dtsResponse := further:getTranslatedConcept($extNmspcId,
-                                                     $frt:LocalCode,
+                                                     $dtsSrcPropName,
                                                      $dtsSrcPropVal,
                                                      $tgTerm,
-                                                     $frt:CodeInSource)
+                                                     $frt:CodeInSource)                                                     
+                                                     
     (: DEBUG DTS URL :)
     (: let $dtsURL := further:getConceptTranslationRestUrl($extNmspcId,
-                                                        $frt:LocalCode,
+                                                        $dtsSrcPropName,
                                                         $dtsSrcPropVal,
                                                         $tgTerm,
                                                         $frt:CodeInSource) :)
@@ -416,7 +451,7 @@ modify (
     return 
     (: DEBUG :)
     (: replace value of node $field with 
-         fn:concat($extNmspcId,'^',$frt:LocalCode,'^',$dtsSrcPropVal,'^',$tgTerm,'^',$frt:CodeInSource) :)
+         fn:concat($extNmspcId,'^',$dtsSrcPropName,'^',$dtsSrcPropVal,'^',$tgTerm,'^',$frt:CodeInSource) :)
     (: replace value of node $field with  $dtsURL :)
  
       if ($translatedPropVal) then (
@@ -558,7 +593,8 @@ modify (
   delete node $inputCopy1/ResultList//@extPath,
   delete node $inputCopy1/ResultList//@dtsTerm,
   delete node $inputCopy1/ResultList//@dtsFlag,
-  delete node $inputCopy1/ResultList//@sourceAttrText
+  delete node $inputCopy1/ResultList//@sourceAttrText,
+  delete node $inputCopy1/ResultList//@extPropName
   
 ) (: End Modify :)
 return
@@ -689,7 +725,9 @@ http://demo.further.utah.edu:9000/fqe/mpi/rest/id/generate/PERSON/FPERSON_ID/327
 			  (: Strip out the Person ID from the Result :)
 			  (: let $resolvedPersonId := $result//fqe:value/text() :)
 			  let $resolvedPersonId := $result/fqe:id/fqe:value/text()
-	
+			  (: DEBUG :)
+              (: let $resolvedPersonId := $parsedDocUrl :)
+  
 			  return (
 	        
 	        (: DEBUG with trace :)
@@ -828,6 +866,23 @@ declare function frt:ageToBirthYear($age)
   
   (: Subtract Age from CurrentYear to Get BirthYear :)
   return $curYear - $age
+};
+
+
+(:====================================================================:)
+(: Function getExtPropName                                            :)
+(: GET External Property Name of XML Element in External XML from MDR :)
+(:====================================================================:)
+declare function frt:getExtPropName(
+                 $leftAttrName as xs:string,
+                 $leftNmspcName as xs:string,
+                 $rightNmspcName as xs:string)
+{ 
+  let $leftAssoc := frt:getLeftAssoc($leftAttrName,$leftNmspcName,$rightNmspcName)
+
+  (: Extract Out the External Property Name Value :)
+  for $entry in $leftAssoc/properties/entry[key='EXTERNAL_PROPERTY_NAME']
+  return $entry/value
 };
 
 

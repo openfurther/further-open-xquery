@@ -57,6 +57,8 @@ declare variable $fqt:SNOMED as xs:string := '30';
 declare variable $fqt:OMOP-V2 as xs:string := '32868';
 declare variable $fqt:ICD-9 as xs:string := '10';
 declare variable $fqt:LOINC as xs:string := '5102';
+declare variable $fqt:HL7 as xs:string := '1017';
+
 
 (: Empty String Value for Substituting Empty Arguments to Functions :)
 declare variable $fqt:EMPTY as xs:string := '';
@@ -421,7 +423,7 @@ modify (
                (: replace value of node $c/fq:parameters/fq:parameter[2]
                   with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
              )
-             
+
              , (: Process Code Translation Next :)
   
              (: Determine if we need to Call DTS to Translate Coded Value :)
@@ -439,24 +441,31 @@ modify (
                  else 
                    $srcNamespaceId
                
+               (: Get and Set the External (Target) Property Name :)
+               (: Only Added this for SIMPLE searchType for now :)
+               let $extPropName := fqt:getExtPropName($mdrResult)
+               let $tgPropName := 
+                 if ($extPropName) then $extPropName
+                 else $fqt:dtsTgPropName
+               
                (: Call DTS :)
                let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
                                                                 $fqt:dtsSrcPropNm,
                                                                 $dtsSrcPropVal,
                                                                 $tgNamespaceId,
-                                                                $fqt:dtsTgPropName)
+                                                                $tgPropName)
                (: DEBUG DTS URL :)
                (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
                                                                    $fqt:dtsSrcPropNm,
                                                                    $dtsSrcPropVal,
                                                                    $tgNamespaceId,
-                                                                   $fqt:dtsTgPropName) :)
+                                                                   $tgPropName) :)
                                                                 
                (: let $debug := concat($srcNamespaceId,'|',
                                     $fqt:dtsSrcPropNm,'|',
                                     $dtsSrcPropVal,'|',
                                     $tgNamespaceId,'|',
-                                    $fqt:dtsTgPropName) :)
+                                    $tgPropName) :)
                                     
                (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
                let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
@@ -465,6 +474,8 @@ modify (
                  (: DEBUG
                  replace value of node $c/fq:parameters/fq:parameter[3]
                       with $dtsURL :)
+                 
+                 
                  
                  if ($translatedPropVal) then (
                    replace value of node $c/fq:parameters/fq:parameter[3]
@@ -478,6 +489,8 @@ modify (
                    (: Insert the Source Attribute Text as an XML Attribute for Error Handling :)
                    insert node attribute sourceAttrText {$sourceAttrText} into $c/fq:parameters/fq:parameter[3]
                  )
+                 
+                 
                  
              else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:ageToBirthYear]) then 
              
@@ -657,32 +670,39 @@ modify (
 
                let $dtsSrcPropVal2 := $c/fq:parameters/fq:parameter[2]/text()
                let $dtsSrcPropVal3 := $c/fq:parameters/fq:parameter[3]/text()
-                               
+
+               (: Get and Set the External (Target) Property Name :)
+               (: Only Added this for SIMPLE searchType for now :)
+               let $extPropName := fqt:getExtPropName($mdrResult)
+               let $tgPropName := 
+                 if ($extPropName) then $extPropName
+                 else $fqt:dtsTgPropName
+
                (: Call DTS for Parameter 2 :)
                let $dtsResponse2 := further:getTranslatedConcept($srcNamespaceId,
                                                                  $fqt:dtsSrcPropNm,
                                                                  $dtsSrcPropVal2,
                                                                  $tgNamespaceId,
-                                                                 $fqt:dtsTgPropName)
+                                                                 $tgPropName)
                                                                 
                (: Call DTS for Parameter 3 :)
                let $dtsResponse3 := further:getTranslatedConcept($srcNamespaceId,
                                                                  $fqt:dtsSrcPropNm,
                                                                  $dtsSrcPropVal3,
                                                                  $tgNamespaceId,
-                                                                 $fqt:dtsTgPropName)
+                                                                 $tgPropName)
                (: Debug DTS URL :)
                (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
                                                                    $fqt:dtsSrcPropNm,
                                                                    $dtsSrcPropVal2,
                                                                    $tgNamespaceId,
-                                                                   $fqt:dtsTgPropName) :)
+                                                                   $tgPropName) :)
   
                (: let $debug := concat($srcNamespaceId,'|',
                                     $fqt:dtsSrcPropNm,'|',
                                     $dtsSrcPropVal2,'|',
                                     $tgNamespaceId,'|',
-                                    $fqt:dtsTgPropName) :)
+                                    $tgPropName) :)
   
                let $translatedPropVal2 := further:getConceptPropertyValue($dtsResponse2)
                let $translatedPropVal3 := further:getConceptPropertyValue($dtsResponse3)
@@ -919,18 +939,25 @@ modify (
              
                let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[2]/text()
                
+               (: Get and Set the External (Target) Property Name :)
+               (: Only Added this for SIMPLE searchType for now :)
+               let $extPropName := fqt:getExtPropName($mdrResult)
+               let $tgPropName := 
+                 if ($extPropName) then $extPropName
+                 else $fqt:dtsTgPropName
+               
                (: Call DTS :)
                let $dtsResponse := further:getTranslatedConcept($srcNamespaceId,
                                                                 $fqt:dtsSrcPropNm,
                                                                 $dtsSrcPropVal,
                                                                 $tgNamespaceId,
-                                                                $fqt:dtsTgPropName)
+                                                                $tgPropName)
                (: Debug DTS URL :)
                (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
                                                                       $fqt:dtsSrcPropNm,
                                                                       $dtsSrcPropVal,
                                                                       $tgNamespaceId,
-                                                                      $fqt:dtsTgPropName) :)
+                                                                      $tgPropName) :)
 
                (: let $translatedPropVal := $dtsResponse/dts:concepts/dts:conceptId/propertyValue/text() :)
                let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
@@ -1101,6 +1128,13 @@ modify (
              , (: Process DTS Stuff :)
              (: Determine if we need to Call DTS to Translate Coded Value :)
              if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then
+
+               (: Get and Set the External (Target) Property Name :)
+               (: Only Added this for SIMPLE searchType for now :)
+               let $extPropName := fqt:getExtPropName($mdrResult)
+               let $tgPropName := 
+                 if ($extPropName) then $extPropName
+                 else $fqt:dtsTgPropName
   
                (: Process One Parameter at a Time, there could be many since this is the IN Operator :)
                (: The first parameter is the Attribute Name, the rest are Attribute Values :)
@@ -1112,13 +1146,13 @@ modify (
                                                                   $fqt:dtsSrcPropNm,
                                                                   $parm,
                                                                   $tgNamespaceId,
-                                                                  $fqt:dtsTgPropName)
+                                                                  $tgPropName)
                  (: Debug DTS URL :)
                  (: let $dtsURL := further:getConceptTranslationRestUrl($srcNamespaceId,
                                                                         $fqt:dtsSrcPropNm,
                                                                         $parm,
                                                                         $tgNamespaceId,
-                                                                        $fqt:dtsTgPropName) :)
+                                                                        $tgPropName) :)
                                                                  
                  let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
                
@@ -2222,6 +2256,18 @@ declare function fqt:yearFromDateTime($parm)
      Since Date or DateTime Format is 2015-05-06T00:00:00-06:00 :)
   fn:substring($parm,1,4)
   
+};
+
+
+(:==================================================================:)
+(: getExtPropName = Get External Property Name from MDR Result      :)
+(:==================================================================:)
+declare function fqt:getExtPropName($result)
+{
+  (: Extract Out the FIRST External Property Name Value
+     Since there should ONLY be One :)
+  for $entry in $result/properties/entry[key='EXTERNAL_PROPERTY_NAME'][1]
+  return $entry/value/text()
 };
 
 

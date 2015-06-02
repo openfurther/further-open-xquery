@@ -359,10 +359,18 @@ modify (
   
            (: There should ONLY be ONE Result per source Attribute :)
            (: if there is more than one result, the criteriaType will determine which result is appropriate :)
-           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           (: let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType) :)
+           (: Expanding criteriaType to include the Source Namespace ID.
+              This is necessary for distinguishing ICD9 vs. ICD10 Attribute Mappings
+              e.g 439401001^1518 where 439401001 is the SNOMED code for Diagnosis
+                                   and 1518 is the Terminology Namespace for ICD10 :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,
+                                              $fqt:FURTHER,
+                                              $tgNamespaceId,
+                                              fn:concat($criteriaType,$fqt:DELIMITER,$srcNamespaceId))
            
            (: DEBUG :)
-           let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId)
+           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
            (: let $mdrTranslatedAttrName := 'Translated MDR Parm2 Name' :)
            
            return (
@@ -370,6 +378,8 @@ modify (
              (: DEBUG
              replace value of node $c/fq:parameters/fq:parameter[2] 
                 with $mdrURL :)
+
+
 
              (: if there is a Result, ALWAYS Set translatedAttrName (Except for SKIP) :)
              (: The datatype for attribute name is always String, 
@@ -423,6 +433,8 @@ modify (
                (: replace value of node $c/fq:parameters/fq:parameter[2]
                   with concat('Debug_No_MDR_Translation_For=',$sourceAttrName) :)
              )
+
+
 
              , (: Process Code Translation Next :)
   
@@ -592,22 +604,26 @@ modify (
                $sourceAttrText
   
            (: Call MDR Web Service to Translate Attribute Name HERE :)
-           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           (: let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType) :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,
+                                              $fqt:FURTHER,
+                                              $tgNamespaceId,
+                                              fn:concat($criteriaType,$fqt:DELIMITER,$srcNamespaceId))
            
-           (: pwkm DEBUG :)
-           let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId)
+           (: DEBUG :)
+           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
 
            return (
              
-             (: pwkm DEBUG
+             (: DEBUG
              replace value of node $c/fq:parameters/fq:parameter[1] 
                 with $mdrURL :)
                           
-             (: pwkm DEBUG 
+             (: DEBUG 
              replace value of node $c/fq:parameters/fq:parameter[1] 
                 with $mdrResult :)
              
-             (: pwkm DEBUG 
+             (: DEBUG 
              replace value of node $c/fq:parameters/fq:parameter[1] 
                 with $criteriaType :)
 
@@ -880,9 +896,12 @@ modify (
            :)
            
            (: Call MDR Web Service to Translate Attribute Name HERE :)
-           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
-           (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-           
+           (: let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType) :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,
+                                              $fqt:FURTHER,
+                                              $tgNamespaceId,
+                                              fn:concat($criteriaType,$fqt:DELIMITER,$srcNamespaceId))
+
            return (
              if ($mdrResult/.[translatedAttribute]) then 
              
@@ -1077,7 +1096,12 @@ modify (
            :)
            
            (: Call MDR Web Service to Translate Attribute Name HERE :)
-           let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType)
+           (: let $mdrResult := fqt:getMDRResult($sourceAttrName,$fqt:FURTHER,$tgNamespaceId,$criteriaType) :)
+           let $mdrResult := fqt:getMDRResult($sourceAttrName,
+                                              $fqt:FURTHER,
+                                              $tgNamespaceId,
+                                              fn:concat($criteriaType,$fqt:DELIMITER,$srcNamespaceId))
+
            return (
              if ($mdrResult/.[translatedAttribute]) then
              
@@ -1691,11 +1715,30 @@ declare function fqt:getMDRResult(
   let $parsedDocUrl := iri-to-uri( $docUrl )
   let $doc := doc($parsedDocUrl)
   
+  (: substring functions return blank when no delimiter is found.
+   therefore, always use tokenize function instead. :)
+  (: let $ct := fn:substring-before($criteriaType,$fqt:DELIMITER) :)
+  (: let $ns := fn:substring-after($criteriaType,$fqt:DELIMITER) :)
+  let $ct := fn:tokenize($criteriaType,concat('\',$fqt:DELIMITER))[1]
+
   (: if there is more than one result, get the correct one based on the criteriaType :)
   return 
+
+    (:  
     if ( count($doc//attributeTranslationResult) > 1 ) then
       $doc/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$criteriaType]
     else 
+      $doc/mdr:attributeTranslationResultList/attributeTranslationResult
+    :)
+
+    if ( count($doc//attributeTranslationResult) > 1 ) then
+  
+      if ( count( $doc//value[starts-with(text(),$ct)] ) > 1 ) then
+        $doc/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$criteriaType]
+      else 
+        $doc/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$ct]
+
+    else
       $doc/mdr:attributeTranslationResultList/attributeTranslationResult
 };
 

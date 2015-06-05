@@ -375,9 +375,10 @@ modify (
            
            return (
             
-             (: DEBUG
-             replace value of node $c/fq:parameters/fq:parameter[2] 
+             (: DEBUG :)
+             (: replace value of node $c/fq:parameters/fq:parameter[2] 
                 with $mdrURL :)
+             (: insert node attribute mdrURL {$mdrURL} into $c/fq:parameters/fq:parameter[2] :)
 
 
 
@@ -1715,31 +1716,34 @@ declare function fqt:getMDRResult(
   let $parsedDocUrl := iri-to-uri( $docUrl )
   let $doc := doc($parsedDocUrl)
   
-  (: substring functions return blank when no delimiter is found.
-   therefore, always use tokenize function instead. :)
-  (: let $ct := fn:substring-before($criteriaType,$fqt:DELIMITER) :)
-  (: let $ns := fn:substring-after($criteriaType,$fqt:DELIMITER) :)
-  let $ct := fn:tokenize($criteriaType,concat('\',$fqt:DELIMITER))[1]
+  let $singleResult := fqt:getSingleMdrResult($doc,$criteriaType)
 
-  (: if there is more than one result, get the correct one based on the criteriaType :)
-  return 
+  return
+    if ($singleResult//entry[value = $criteriaType]) then
 
-    (:  
-    if ( count($doc//attributeTranslationResult) > 1 ) then
-      $doc/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$criteriaType]
-    else 
-      $doc/mdr:attributeTranslationResultList/attributeTranslationResult
-    :)
+    (: if the criteriaType Sub-Namespace is Used, that means
+       there could be multiple terminology standards being used.
+       e.g. ICD9 vs. ICD10.
+       Sometimes we do not want to translate a certain standard.
+       For example, if we do not translate ICD10, we will configure the MDR
+       to Error this out, using the OBSERVATION_TYPE_DX^E indicator.
+       Check Each entry for Error before Returning Any Result
+       Match Exact CriteriaType e.q. '439401001^1518' :)  
+      for $entry in $singleResult//entry[value = $criteriaType]
+    
+        let $errorChecker := fn:substring-after($entry/key,$fqt:DELIMITER)
+        (: DEBUG
+           return $errorChecker :)
 
-    if ( count($doc//attributeTranslationResult) > 1 ) then
-  
-      if ( count( $doc//value[starts-with(text(),$ct)] ) > 1 ) then
-        $doc/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$criteriaType]
-      else 
-        $doc/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$ct]
+      return
+      if ($errorChecker = $fqt:ERROR) then
+        <error>criteriaType {$criteriaType} is forced to Error Out by MDR Configuration
+          {$entry}
+        </error>
+      else $singleResult
+      
+    else $singleResult (: Always Return Result if No observationType was Used :)
 
-    else
-      $doc/mdr:attributeTranslationResultList/attributeTranslationResult
 };
 
 (:==================================================================:)
@@ -2311,6 +2315,43 @@ declare function fqt:getExtPropName($result)
      Since there should ONLY be One :)
   for $entry in $result/properties/entry[key='EXTERNAL_PROPERTY_NAME'][1]
   return $entry/value/text()
+};
+
+
+(:==================================================================:)
+(: getSingleMdrResult = Get Single MDR Result from REST Output      :)
+(:==================================================================:)
+declare function fqt:getSingleMdrResult($result,$criteriaType)
+{
+  (: Get First Token of Criteria Type
+     Escape Special Characters with a Back Slash :)
+  let $ct := fn:tokenize($criteriaType,concat('\',$fqt:DELIMITER))[1]
+
+  return
+    if ( count($result//attributeTranslationResult) > 1 ) then
+
+      (: Find Single Result
+         Distinquish between ICD9 vs. ICD10, etc.
+         If more then one terminology is used within the SAME observationType (e.g. Diagnosis)
+         then use the additional namespace ID to determine the Result
+         This means whenever more then one coding standard is used for a single observationType,
+         You MUST configure the MDR with the observationType SNOMED Code AND the Coding Standard's DTS Namespace ID
+         e.g  '439401001^1518', where '439401001' means Diagnosis, and '1518' means ICD10R :)
+      if ( count( $result//value[starts-with(text(),$ct)] ) > 1 ) then
+        $result/mdr:attributeTranslationResultList/attributeTranslationResult[properties/entry/value=$criteriaType][1]
+      else
+        (: Otherwise, get the single result with the correct observationType :)
+        (: The MDR Config should support both formats of:
+           '439401001^1518' or '439401001' :)
+        $result/mdr:attributeTranslationResultList/attributeTranslationResult[
+                                                   properties/entry/value=$ct
+                                                   or 
+                                                   properties/entry/value=$criteriaType
+                                                   ][1]
+
+    else (: There is Only One Result, which may NOT have any Observation Types :)
+      $result/mdr:attributeTranslationResultList/attributeTranslationResult[1]
+
 };
 
 

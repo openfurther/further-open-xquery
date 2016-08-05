@@ -139,3 +139,50 @@ declare function further:getNamespaceName(
   (: Find the namespace name in the XML response document :) 
   return doc( $parsedDocUrl )/dts:namespace/name/text()  
 };
+
+(:==================================================================:)
+(: pwkm 20160805                                                    :)
+(: Return DTS Search Concept URL by:                                :)
+(:   namespace name,                                                :)
+(:   property name,                                                 :)
+(:   property value                                                 :)
+(:==================================================================:)
+declare function further:getSearchRestUrl(
+  $srcNmspc as xs:string,
+  $srcPropNm as xs:string,
+  $srcPropVal as xs:string)
+{
+  (: EXAMPLE: http://dev-esb.further.utah.edu:9000/dts/rest/search/concept/MultumDrug/Code%20in%20Source/BD-1327-913 :)
+  (:          http://dev-esb.further.utah.edu:9000/dts/rest/search/concept/{namespace}/{propertyName}/{propertyValue} :)
+  (: Sometimes we have values that contain special characters, such as a % for unitOfMeasure.
+     Therefore, we need to escape these special characters with the encode-for-uri function. 
+     The call to iri-to-uri function does not escape these special characters.
+     And the reason why we do not simply replace iri-to-uri with encode-for-uri is because
+     the encode-for-uri function escapes special characters such as : and / 
+     which are valid parts of a http://url that we DO NOT want to escape. :)
+  let $srcPropertyVal := if (fn:string-length( $srcPropVal ) = 0) then '0' else fn:encode-for-uri($srcPropVal)
+  let $fixedSrcNamespace := further:replaceBracketsWithHexCodes( $srcNmspc )
+  
+  let $docUrl := fn:concat($const:restServer, $const:dtsSearchService, '/concept/', $fixedSrcNamespace, '/', $srcPropNm, '/', $srcPropertyVal)
+
+  let $parsedDocUrl := iri-to-uri( $docUrl )
+  
+  return $parsedDocUrl
+
+};
+
+(:==================================================================:)
+(: pwkm 20160805                                                    :)
+(: Return DTS Concept Name by:                                      :)
+(:   namespace name,                                                :)
+(:   property name,                                                 :)
+(:   property value                                                 :)
+(:==================================================================:)
+declare function further:searchConcept(
+  $srcNmspc as xs:string,
+  $srcPropNm as xs:string,
+  $srcPropVal as xs:string)
+{
+  let $restUrl := further:getSearchRestUrl( $srcNmspc, $srcPropNm, $srcPropVal )
+  return doc( $restUrl )
+};

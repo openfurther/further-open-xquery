@@ -63,6 +63,9 @@ declare variable $fqt:HL7 as xs:string := '1017';
 (: Empty String Value for Substituting Empty Arguments to Functions :)
 declare variable $fqt:EMPTY as xs:string := '';
 
+(: Single Space as Delimiter :)
+declare variable $fqt:SPACE as xs:string := ' ';
+
 (: Mark Criterias that got Skipped :)
 declare variable $fqt:SKIP as xs:string := 'S';
 
@@ -83,6 +86,7 @@ declare variable $fqt:DELIMITER as xs:string := '^';
 declare variable $fqt:STATIC as xs:string := 'STATIC';
 declare variable $fqt:CUSTOM as xs:string := 'CUSTOM';
 declare variable $fqt:INVALID_CUSTOM_FUNCTION as xs:string := 'INVALID_CUSTOM_FUNCTION: ';
+declare variable $fqt:REMOVE as xs:string := 'REMOVE';
 
 (: Arity = number of arguments for Dynamic Function Calls:)
 declare variable $fqt:GLOBAL_ARITY as xs:integer := 1;
@@ -110,6 +114,8 @@ declare variable $fqt:SIMPLE as xs:string := 'SIMPLE';
 declare variable $fqt:BETWEEN as xs:string := 'BETWEEN';
 declare variable $fqt:LIKE as xs:string := 'LIKE';
 declare variable $fqt:IN as xs:string := 'IN';
+declare variable $fqt:SIMPLE_TO_IN as xs:string := 'SIMPLE_TO_IN';
+
 
 (:==================================================================:)
 (: Main Translate Query Function                                    :)
@@ -158,9 +164,10 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   let $cleaned := fqt:cleanup($validated)
   
   (: Return Final Cleaned Version :)
-  (: return $debug :)
+  (: DEBUG :)
+  (: return $validated :)
   return $cleaned
-  
+
 };
 
 
@@ -371,16 +378,13 @@ modify (
            
            (: DEBUG :)
            (: let $mdrURL := fqt:getMDRAttrURL($sourceAttrName,$fqt:FURTHER,$tgNamespaceId) :)
-           (: let $mdrTranslatedAttrName := 'Translated MDR Parm2 Name' :)
            
            return (
             
              (: DEBUG :)
              (: replace value of node $c/fq:parameters/fq:parameter[2] 
                 with $mdrURL :)
-             (: insert node attribute mdrURL {$mdrURL} into $c/fq:parameters/fq:parameter[2] :)
-
-
+             (: insert node attribute mdrURL {$mdrURL} into $c/fq:parameters/fq:parameter[2], :)
 
              (: if there is a Result, ALWAYS Set translatedAttrName (Except for SKIP) :)
              (: The datatype for attribute name is always String, 
@@ -401,7 +405,6 @@ modify (
                  return (
                    replace value of node $c/fq:parameters/fq:parameter[2]
                       with fn:replace($sourceAttrText,$sourceAttrName,$translatedAttrName)
-                      (: with $mdrURL :)
                    ,
                    replace value of node $c/@mdrFlag with $fqt:YES
                    
@@ -436,12 +439,137 @@ modify (
              )
 
 
-
              , (: Process Code Translation Next :)
   
+             (: pwkm 20160801 UDOH-APCD
+                Let's see if we need searchType Conversion for Original SIMPLE searchType
+                Currently The only conversion that makes logical sense is a SIMPLE-TO-IN conversion.
+                For example, From One MultumDrug Code to Many NDC Codes.
+                Determine if there's SIMPLE_TO_IN Conversion
+             :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:SIMPLE_TO_IN)]
+                 and $c/fq:parameters/fq:parameter[3]/@dtsFlag!=$fqt:ERROR) then (
+  
+               (: Convert searchType :)
+               replace value of node $c/fq:searchType with $fqt:IN
+               ,  
+               
+               (: Capture the Source Property Value & Type Here, so we can use it later. :)
+               for $entry in $mdrResult//properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:SIMPLE_TO_IN)]
+               
+               (: Get Custom Function Name :)
+               let $conversionFunction := fn:substring-after($entry/value, $fqt:DELIMITER)
+               
+               (: Get Source Coded Value that needs DTS Translation :)
+               let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[3]/text()
+
+               (: Get Data Type for Coded Value :)
+               let $dataType := 
+                 if ($mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]) then
+                   $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]/value/text()
+                 else (: No DataType Conversion Needed, so use original Data Type :)
+                   $c/fq:parameters/fq:parameter[3]/@xsi:type
+                   
+               (: Translate the Single Coded Value into Multiple <parameter> nodes :)
+               (: SIMPLE_TO_IN implies that there is need for coded value translation :)
+               return (
+                 (: Get Rid of First & Third <parameter> node from SIMPLE criteria :)
+                 delete node $c//fq:parameter[1]
+                 ,
+                 delete node $c//fq:parameter[3]
+                 ,
+                 (: Determine the Source Namespace ID since one is for the code, and the other is for the type :)
+                 (: This ONLY Happens to SIMPLE, Since that is where the Phrases Occur :)
+                 let $srcNamespaceId := 
+                   if ($sourceAttrName = 'observationType') then 
+                     $criteriaTypeNmspcId
+                   else 
+                     $srcNamespaceId
+                 
+                 (: Get the Namespace Name :)
+                 let $srcNamespaceName := further:getNamespaceName($srcNamespaceId)               
+                 
+                 (: Get and Set the External (Target) Property Name :)
+                 (: Only Added this for SIMPLE searchType for now :)
+                 let $extPropName := fqt:getExtPropName($mdrResult)
+                 let $tgPropName := 
+                   if ($extPropName) then $extPropName
+                   else $fqt:dtsTgPropName
+                 
+                 (: New DTS Search Function Call :)
+                 (: We are assuming the many coded values are stored as DTS Concept
+                    Properties at this point.
+                    We may need to change this otherwise, in the future,
+                    If the one-to-many mappings are done through DTS Associations. :)
+                 let $dtsResponse := further:searchConcept($srcNamespaceName,
+                                                           $fqt:dtsSrcPropNm,
+                                                           $dtsSrcPropVal)
+
+                 (: DEBUG DTS URL :)
+                 (: let $dtsURL := further:getSearchRestUrl($srcNamespaceName,
+                                                            $fqt:dtsSrcPropNm,
+                                                            $dtsSrcPropVal) :)
+                                                                  
+                 (: DEBUG :)
+                 (: return insert node <parameter>{$dtsURL}</parameter> into $c/fq:parameters :)
+                 (: return insert node <parameter>{$dtsResponse}</parameter> into $c/fq:parameters :)
+
+                 (: Loop through all the translated Values and create new <parameter> node for each one :)
+                 for $prop in $dtsResponse//property[name=$tgPropName]
+                   
+                   let $dtsVal := $prop/value/text()
+                   (: DEBUG
+                      return insert node <dtsVal>{$dtsVal}</dtsVal> into $c/fq:parameters
+                   :)
+                   
+                   (: Call Custom Function if Necessary :)
+                   return (: If there is a data conversion function from the MDR :)
+                   if ($conversionFunction) then
+                     
+                     (: Get Function Handle :)
+                     let $funcHandle := fn:function-lookup(xs:QName($conversionFunction),$fqt:GLOBAL_ARITY)
+                     return 
+                       (: MUST Check Function Handle using fn:empty
+                          Otherwise there will be RunTime Error! :)
+                       if (fn:empty($funcHandle)) then (
+                         
+                         (: Error Handling :)
+
+                         (: DEBUG 
+                            insert node <parameter>'No Dynamic Function Handle'</parameter>
+                              into $c/fq:parameters,
+
+                            insert node <DEBUG_CRITERIA>{$c}</DEBUG_CRITERIA>
+                              into $c/fq:parameters
+                         :)
+                         
+                         (: Note The Update Pending List thinks that the parameter[2] 
+                                 from the original SIMPLE searchType criteria is still there.
+                                 So use the fq:parameter[2] node here! :)
+                         replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                            with $fqt:ERROR,
+                         
+                         insert node attribute sourceAttrText {$sourceAttrText}
+                           into $c/fq:parameters/fq:parameter[2]
+                       )  
+                       else
+                         (: Call Data Conversion Function :)
+                         let $convertedVal := $funcHandle($dtsVal)
+                         return (: Insert Converted Value :)
+                         insert node <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$convertedVal}</parameter>
+                           into $c/fq:parameters
+
+                   else (: Insert Un-Converted, but DTS Translated Value :)
+                     insert node <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$dtsVal}</parameter> into $c/fq:parameters
+
+               )(: End Return :)
+           
+             )(: End If :)
+             
+           
              (: Determine if we need to Call DTS to Translate Coded Value :)
              (: Skip the parameters with preTranslation Errors :)
-             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]
+             else if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]
                  and $c/fq:parameters/fq:parameter[3]/@dtsFlag!=$fqt:ERROR) then 
              
                let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[3]/text()
@@ -484,11 +612,10 @@ modify (
                let $translatedPropVal := further:getConceptPropertyValue($dtsResponse)
                
                return
-                 (: DEBUG
-                 replace value of node $c/fq:parameters/fq:parameter[3]
+                 (: DEBUG :)
+                 (: replace value of node $c/fq:parameters/fq:parameter[3]
                       with $dtsURL :)
-                 
-                 
+
                  
                  if ($translatedPropVal) then (
                    replace value of node $c/fq:parameters/fq:parameter[3]
@@ -1294,6 +1421,11 @@ return $c
 (:==================================================================:)
 (: transAlias = Translate Alias Stuff for Query                     :)
 (:==================================================================:)
+(: Note: Having 3 transformations within this single function
+         makes it more difficult to debug, so be careful here.
+         and if needed, consider breaking out these 3 tranformations
+         into separate functions.
+:)
 declare function fqt:transAlias($inputXML as document-node(),
                                 $targetNamespaceId as xs:string)
 {
@@ -1377,10 +1509,11 @@ modify (
      there are multiple joins to the same table,
      such as OpenMRS.personAttribute is overloaded with different
      types of values :)
-     
+
   for $p at $i in $inputCopy2//fq:parameter[@attrAlias]
   let $key := substring-before($p/@attrAlias,$fqt:DELIMITER)
   let $val := substring-after($p/@attrAlias,$fqt:DELIMITER)
+  let $oldAliasKey := $p/@aliasKey
   return
   (: Insert into the First <query> parent, 
      therefore, 
@@ -1395,7 +1528,12 @@ modify (
 			  <key>{$key}</key>
 				<value>{$val}</value>
 			</alias>
-	    into $p/ancestor::fq:query[1]//fq:aliases
+      (: Fixed Bug here, because we need to be able to add attrAlias to 
+         Inner or Outter <query>
+         So we no longer need to focus only on the inner sub-query using [1] :)
+      (: into $p/ancestor::fq:query[1]//fq:aliases :)
+      into $inputCopy2//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey]
+      
   else()
 
 ) (: End Modify :)
@@ -1430,6 +1568,7 @@ modify (
   for $p at $i in $inputCopy3//fq:parameter[@extraAlias]
   let $key := substring-before($p/@extraAlias,$fqt:DELIMITER)
   let $val := substring-after($p/@extraAlias,$fqt:DELIMITER)
+  let $oldAliasKey := $p/@aliasKey
   return
   (: Insert into the First <query> parent, 
      therefore, 
@@ -1444,7 +1583,12 @@ modify (
 			  <key>{$key}</key>
 				<value>{$val}</value>
 			</alias>
-	    into $p/ancestor::fq:query[1]//fq:aliases
+      (: Fixed Bug here, because what if we needed to add the extra <alias>
+         onto the Outter <query>?
+         So we no longer need to focus only on the inner sub-query using [1] :)
+      (: into $p/ancestor::fq:query[1]//fq:aliases :)
+      into $inputCopy3//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey]
+      
   else()
 
 ) (: End Modify :)
@@ -1645,7 +1789,11 @@ modify (
     (: Remove all Aliases that are not being used :)
     (: Sometimes one Source Alias translates to multiple target Aliases :)
     (: However, not all translated Aliases may be needed :)
-    for $alias in $inputCopy//fq:alias[@oldAliasKey]
+
+    (: pwkm 20160804 Can we check for ALL <alias> nodes?
+       Why do we care if it has to have @oldAliasKey? :)
+    (: for $alias in $inputCopy//fq:alias[@oldAliasKey] :)
+    for $alias in $inputCopy//fq:alias
       let $key := $alias/fq:key
       return
         if (not(fn:exists($inputCopy//fq:parameter[fn:tokenize(.,'\.')[1]=$key]))) then
@@ -1780,15 +1928,29 @@ declare function fqt:printDebug($debugVar,$msg as xs:string?)
 
 
 (:==================================================================:)
-(: ageToBirthYear = Translate Age to BirthYear                      :)
+(: ageToBirthYear = Translate Age to BirthYear or Vice Versa        :)
+(: This function can translate Both Directions.                     :)
+(:   Age to BirthYear                                               :)
+(:   OR                                                             :)
+(:   BirthYear to Age                                               :)
+(:   Because the Logic is exactly the Same.                         :)
+(:     CurrentYear minus Age = BirthYear                            :)
+(:     CurrentYear minus BirthYear = Age                            :)
+(:                                                                  :)
+(:  Refer to the BETWEEN searchType criteria processing to see how  :)
+(:  parameters are Ordered with the smaller value as the second     :)
+(:  parameter, and then the larger value as the 3rd parameter.      :)
+(:                                                                  :)
 (:==================================================================:)
-declare function fqt:ageToBirthYear($age)
+declare function fqt:ageToBirthYear($ageOrBirthYear)
 {
   (: Get Current Year :)
   let $curYear := year-from-date(current-date())
   
   (: Subtract Age from CurrentYear to Get BirthYear :)
-  return $curYear - $age
+  (: OR :)
+  (: Subtract BirthYear from CurrentYear to Get Age :)
+  return $curYear - $ageOrBirthYear
 };
 
 
@@ -1804,21 +1966,29 @@ modify (
   for $criteriaPhrase in $inputCopy//*[fq:searchType/text()='CONJUNCTION' 
                                       and fq:criteria[fq:searchType/text()='SIMPLE' 
                                       and fn:contains(fq:parameters/fq:parameter[2]/text(),'observationNamespaceId')]]
-                                      
+
     (: Get the observationType Value :)
     for $criteria in $criteriaPhrase/fq:criteria[fn:contains(fq:parameters/fq:parameter[2]/text(),'observationType')]
       let $criteriaType := $criteria/fq:parameters/fq:parameter[3]/text()
     
-      (: Set ObservationType For Each 'observation' Related Parameters
-         Including SIMPLE & IN searchTypes and observationType
-         Since sometimes we do translate the observationType values :)
-      (:for $parm in $criteriaPhrase/fq:criteria/fq:parameters/fq:parameter[fn:starts-with(fn:tokenize(.,'\.')[last()],'observation')]
-        return insert node attribute obsType {$criteriaType} into $parm :)
-        
-      (: A better way may be, for every parameter that has an aliasKey attribute :)
-      (: Because for Labs, there are parameters with non 'observation' words in it :)
-      for $parm in $criteriaPhrase/fq:criteria/fq:parameters/fq:parameter[@aliasKey]
-        return insert node attribute obsType {$criteriaType} into $parm
+    (: Get the observationType DTS Namespace ID :)
+    for $criteria in $criteriaPhrase/fq:criteria[fn:contains(fq:parameters/fq:parameter[2]/text(),'observationNamespaceId')]
+      let $namespaceId := $criteria/fq:parameters/fq:parameter[3]/text()
+
+    (: Set ObservationType For Each 'observation' Related Parameters
+       Including SIMPLE & IN searchTypes and observationType
+       Since sometimes we do translate the observationType values :)
+    (:for $parm in $criteriaPhrase/fq:criteria/fq:parameters/fq:parameter[fn:starts-with(fn:tokenize(.,'\.')[last()],'observation')]
+      return insert node attribute obsType {$criteriaType} into $parm :)
+      
+    (: A better way may be, for every parameter that has an aliasKey attribute :)
+    (: Because for Labs, there are parameters with non 'observation' words in it :)
+    for $parm in $criteriaPhrase/fq:criteria/fq:parameters/fq:parameter[@aliasKey]
+      (: Append the DTS Namespace ID into the Observation Type
+         Mainly because Procedure Types can be either CPT or ICD Codes!
+         So we need to know what kind of Procedure Code we're dealing with. :)
+      let $criteriaTypeNamepace := fn:concat($criteriaType,'^',$namespaceId)
+      return insert node attribute obsType {$criteriaTypeNamepace} into $parm
 
 ) (: End Modify :)
 return $inputCopy
@@ -1903,7 +2073,10 @@ modify (
     return 
       if ($alias/.[@obsType]) then
         (: For Each Parameter with Observation Type, Update Alias Prefix :)
-        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and @obsType=$obsType]
+        (: for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and @obsType=$obsType] :)
+        (: pwkm UDOH-APCD :)
+        (: Using contains is safer here, because we may not always configure the Observation Type with the DTS Namespace ID :)
+        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and fn:contains(@obsType,$obsType)]
         return (
           replace value of node $parm with
           fn:replace($parm/text(), concat($oldAliasKey,'.'), concat($newAliasKey,'.') )
@@ -1912,11 +2085,18 @@ modify (
         )
       else
         (: For Each Parameter Non-Observation Types, Update Alias Prefix :)
-        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey]
+        (: pwkm 20160728 UDOH-APCD
+           Omit the @attrAlias Custom Aliases!
+           Since that is processed seperately.
+           We should also only process the parameters that has been MDR Attribute Translated (mdrFlag=Y).
+           Otherwise, when a central attribute translates to two different attributes belonging to two different tables,
+           this step would try to update them twice, causing an error. :)
+        (: for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey] :)
+
+        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and not(@attrAlias) and ../../@mdrFlag='Y']
         return (
           replace value of node $parm with
           fn:replace($parm/text(), concat($oldAliasKey,'.'), concat($newAliasKey,'.') )
-
         )
 
 ) (: End Modify :)
@@ -1928,9 +2108,23 @@ modify (
   
   (: For Each Field Alias :)
   for $p in $inputCopy2//fq:parameter[@attrAlias]
-  let $key := fn:substring-before($p/@attrAlias,$fqt:DELIMITER)
+  let $attrAlias := fn:substring-before($p/@attrAlias,$fqt:DELIMITER)
+  
   return
-    replace value of node $p with fn:concat($key,'.',$p)
+
+    (: if Old Alias Key should be Removed, then remove it :)
+    if ($p/@aliasKey and $attrAlias=$fqt:REMOVE) then
+      let $oldAliasKey := $p/@aliasKey
+      return replace value of node $p with 
+             fn:replace($p/text(), concat($oldAliasKey,'.'), $fqt:EMPTY )
+    (: Replace Old Alias Key if Exist :)
+    else if ($p/@aliasKey) then
+      let $oldAliasKey := $p/@aliasKey
+      return replace value of node $p with 
+             fn:replace($p/text(), concat($oldAliasKey,'.'), concat($attrAlias,'.') )
+    
+    else (: Or Add New Alias Key if there is no old alias key :)
+      replace value of node $p with fn:concat($attrAlias,'.',$p)
 
 ) (: End Modify :)
 return $inputCopy2
@@ -2313,7 +2507,9 @@ declare function fqt:getExtPropName($result)
 {
   (: Extract Out the FIRST External Property Name Value
      Since there should ONLY be One :)
-  for $entry in $result/properties/entry[key='EXTERNAL_PROPERTY_NAME'][1]
+  (: for $entry in $result/properties/entry[key='EXTERNAL_PROPERTY_NAME'][1] :)
+  (: This way is easier for Debugging :)
+  for $entry in $result//entry[key='EXTERNAL_PROPERTY_NAME'][1]
   return $entry/value/text()
 };
 
@@ -2352,6 +2548,23 @@ declare function fqt:getSingleMdrResult($result,$criteriaType)
     else (: There is Only One Result, which may NOT have any Observation Types :)
       $result/mdr:attributeTranslationResultList/attributeTranslationResult[1]
 
+};
+
+
+(:==================================================================:)
+(: getNdc = Get NDC Code from DTS REST Output Full Description      :)
+(:==================================================================:)
+declare function fqt:getNdc($ndcFull)
+{
+  (: Example of Full NDC Description:
+     "00009002901 [N] [Pfizer U.S. Pharmaceuticals Group]"
+     We only want the first 11 digits.
+  :)
+  
+  (: Get First Token of Full NDC Description :)
+  let $ndc := fn:tokenize($ndcFull, $fqt:SPACE)[1]
+
+  return $ndc
 };
 
 

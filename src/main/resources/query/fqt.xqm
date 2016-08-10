@@ -165,7 +165,7 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   
   (: Return Final Cleaned Version :)
   (: DEBUG :)
-  (: return $validated :)
+(:   return $updatedParmAlias :)
   return $cleaned
 
 };
@@ -1513,7 +1513,12 @@ modify (
   for $p at $i in $inputCopy2//fq:parameter[@attrAlias]
   let $key := substring-before($p/@attrAlias,$fqt:DELIMITER)
   let $val := substring-after($p/@attrAlias,$fqt:DELIMITER)
-  let $oldAliasKey := $p/@aliasKey
+  
+  (: pwkm 20160809 Reversed Bug Fix, It was NOT a Bug :)
+  (: if person.attr translates to Non-person attr, then we do not have oldAliasKey!
+     THIS IS A PROBLEM! So we need to reverse this Bug Fix. :)
+  (: let $oldAliasKey := $p/@aliasKey :)
+  
   return
   (: Insert into the First <query> parent, 
      therefore, 
@@ -1524,15 +1529,15 @@ modify (
   :)
   if ($key and $val) then
 	  insert node
-	    <alias>
+      (: <alias oldAliasKey='{$oldAliasKey}'> :)
+			<alias attrAlias='{$p/@attrAlias}'>
 			  <key>{$key}</key>
 				<value>{$val}</value>
 			</alias>
-      (: Fixed Bug here, because we need to be able to add attrAlias to 
-         Inner or Outter <query>
-         So we no longer need to focus only on the inner sub-query using [1] :)
-      (: into $p/ancestor::fq:query[1]//fq:aliases :)
-      into $inputCopy2//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey]
+
+      (: pwkm 20160809 Reversed Bug Fix, It was NOT a Bug :)
+      into $p/ancestor::fq:query[1]//fq:aliases
+      (: into $inputCopy2//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey] :)
       
   else()
 
@@ -1568,7 +1573,8 @@ modify (
   for $p at $i in $inputCopy3//fq:parameter[@extraAlias]
   let $key := substring-before($p/@extraAlias,$fqt:DELIMITER)
   let $val := substring-after($p/@extraAlias,$fqt:DELIMITER)
-  let $oldAliasKey := $p/@aliasKey
+  (: let $oldAliasKey := $p/@aliasKey :)
+
   return
   (: Insert into the First <query> parent, 
      therefore, 
@@ -1579,15 +1585,17 @@ modify (
   :)
   if ($key and $val) then
 	  insert node
-	    <alias>
-			  <key>{$key}</key>
+      (: <alias oldAliasKey='{$oldAliasKey}'> :)
+			<alias extraAlias='{$p/@extraAlias}'>
+        <key>{$key}</key>
 				<value>{$val}</value>
 			</alias>
       (: Fixed Bug here, because what if we needed to add the extra <alias>
          onto the Outter <query>?
-         So we no longer need to focus only on the inner sub-query using [1] :)
-      (: into $p/ancestor::fq:query[1]//fq:aliases :)
-      into $inputCopy3//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey]
+         Since we are looping through each <parameter> node, both Inner and Outer <query> nodes will be processed. :)
+      (: pwkm 20160809 Reversed Bug Fix, It was NOT a Bug :)
+      into $p/ancestor::fq:query[1]//fq:aliases
+      (: into $inputCopy3//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey] :)
       
   else()
 
@@ -1791,9 +1799,19 @@ modify (
     (: However, not all translated Aliases may be needed :)
 
     (: pwkm 20160804 Can we check for ALL <alias> nodes?
-       Why do we care if it has to have @oldAliasKey? :)
-    (: for $alias in $inputCopy//fq:alias[@oldAliasKey] :)
-    for $alias in $inputCopy//fq:alias
+       Why do we care if it has to have @oldAliasKey?
+       Because sometimes we have new EXTRA_ALIAS or ATTR_ALIAS <alias> nodes
+       and they do not have the @oldAliasKey attribute, but we want to keep the new <alias> nodes.
+       Even though the new <alias> nodes are not used within any <criteria>.
+       For example, when a new <alias> node is only used to traverse into a sub table.
+       i.e. table1.table2.field
+    :)
+
+(:     for $alias in $inputCopy//fq:alias[@oldAliasKey] :)
+(:     for $alias in $inputCopy//fq:alias :)
+
+    (: pwkm 20160809 enhance <alias> nodes cleanup to include removing REMOVE aliases :)
+    for $alias in $inputCopy//fq:alias[@oldAliasKey or fn:contains(@attrAlias,$fqt:REMOVE)]
       let $key := $alias/fq:key
       return
         if (not(fn:exists($inputCopy//fq:parameter[fn:tokenize(.,'\.')[1]=$key]))) then
@@ -2069,35 +2087,40 @@ modify (
     (: For example, if we had observation.observation in the parameter,
        Only the "observation." (with the period) will be replaced :)    
     (: Determine which Association to use if more than one :)
-    
+
     return 
+    
+      (: pwkm 20160728 UDOH-APCD
+      Omit the @attrAlias Custom Aliases!
+      Since that is processed seperately.
+      We should also only process the parameters that has been MDR Attribute Translated (mdrFlag=Y).
+      Otherwise, when a central attribute translates to two different attributes belonging to two different tables,
+      this step would try to update them twice, causing an error. :)
+    
       if ($alias/.[@obsType]) then
         (: For Each Parameter with Observation Type, Update Alias Prefix :)
         (: for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and @obsType=$obsType] :)
         (: pwkm UDOH-APCD :)
         (: Using contains is safer here, because we may not always configure the Observation Type with the DTS Namespace ID :)
-        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and fn:contains(@obsType,$obsType)]
-        return (
+        (: for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and fn:contains(@obsType,$obsType)] :)
+        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey 
+                                                        and fn:contains(@obsType,$obsType) 
+                                                        and not(@attrAlias)
+                                                        and ../../@mdrFlag=$fqt:YES ]
+        return
           replace value of node $parm with
           fn:replace($parm/text(), concat($oldAliasKey,'.'), concat($newAliasKey,'.') )
-          
 
-        )
       else
         (: For Each Parameter Non-Observation Types, Update Alias Prefix :)
-        (: pwkm 20160728 UDOH-APCD
-           Omit the @attrAlias Custom Aliases!
-           Since that is processed seperately.
-           We should also only process the parameters that has been MDR Attribute Translated (mdrFlag=Y).
-           Otherwise, when a central attribute translates to two different attributes belonging to two different tables,
-           this step would try to update them twice, causing an error. :)
-        (: for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey] :)
 
-        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey and not(@attrAlias) and ../../@mdrFlag='Y']
-        return (
+        (: for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey] :)
+        for $parm at $index in $inputCopy//fq:parameter[@aliasKey=$oldAliasKey 
+                                                        and not(@attrAlias) 
+                                                        and ../../@mdrFlag=$fqt:YES ]
+        return
           replace value of node $parm with
           fn:replace($parm/text(), concat($oldAliasKey,'.'), concat($newAliasKey,'.') )
-        )
 
 ) (: End Modify :)
 return
@@ -2117,13 +2140,14 @@ modify (
       let $oldAliasKey := $p/@aliasKey
       return replace value of node $p with 
              fn:replace($p/text(), concat($oldAliasKey,'.'), $fqt:EMPTY )
-    (: Replace Old Alias Key if Exist :)
-    else if ($p/@aliasKey) then
+
+    else if ($p/@aliasKey) then (: Replace Old Alias Key if Exist :)
       let $oldAliasKey := $p/@aliasKey
       return replace value of node $p with 
-             fn:replace($p/text(), concat($oldAliasKey,'.'), concat($attrAlias,'.') )
-    
-    else (: Or Add New Alias Key if there is no old alias key :)
+        fn:replace($p/text(), concat($oldAliasKey,'.'), concat($attrAlias,'.') )
+
+    else (: Or Add New Alias Key if there is no old alias key 
+            e.g. Central Root Object Attribute to External Non-Root Object Attribute :)
       replace value of node $p with fn:concat($attrAlias,'.',$p)
 
 ) (: End Modify :)

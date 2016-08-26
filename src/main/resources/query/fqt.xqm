@@ -98,6 +98,7 @@ declare variable $fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE as xs:string := 'ATTR_VALUE_
 declare variable $fqt:MORE_CRITERIA as xs:string := 'MORE_CRITERIA';
 declare variable $fqt:ATTR_ALIAS as xs:string := 'ATTR_ALIAS';
 declare variable $fqt:EXTRA_ALIAS as xs:string := 'EXTRA_ALIAS';
+declare variable $fqt:EXTERNAL_PROPERTY_NAME as xs:string := 'EXTERNAL_PROPERTY_NAME';
 
 declare variable $fqt:skipATTR as xs:string := 'skipAttr';
 declare variable $fqt:translateCode as xs:string := 'translateCode';
@@ -114,7 +115,7 @@ declare variable $fqt:SIMPLE as xs:string := 'SIMPLE';
 declare variable $fqt:BETWEEN as xs:string := 'BETWEEN';
 declare variable $fqt:LIKE as xs:string := 'LIKE';
 declare variable $fqt:IN as xs:string := 'IN';
-declare variable $fqt:SIMPLE_TO_IN as xs:string := 'SIMPLE_TO_IN';
+declare variable $fqt:ONE_TO_MANY as xs:string := 'ONE_TO_MANY';
 
 
 (:==================================================================:)
@@ -165,7 +166,7 @@ declare function fqt:transQuery($inputXML as document-node(),$targetNamespaceId 
   
   (: Return Final Cleaned Version :)
   (: DEBUG :)
-(:   return $updatedParmAlias :)
+(:   return $translatedSingleCriteria :)
   return $cleaned
 
 };
@@ -447,18 +448,15 @@ modify (
                 For example, From One MultumDrug Code to Many NDC Codes.
                 Determine if there's SIMPLE_TO_IN Conversion
              :)
-             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:SIMPLE_TO_IN)]
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:ONE_TO_MANY)]
                  and $c/fq:parameters/fq:parameter[3]/@dtsFlag!=$fqt:ERROR) then (
   
-               (: Convert searchType :)
+               (: Convert searchType from SIMPLE to IN :)
                replace value of node $c/fq:searchType with $fqt:IN
                ,  
                
-               (: Capture the Source Property Value & Type Here, so we can use it later. :)
-               for $entry in $mdrResult//properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:SIMPLE_TO_IN)]
-               
-               (: Get Custom Function Name :)
-               let $conversionFunction := fn:substring-after($entry/value, $fqt:DELIMITER)
+               (: Get Value Conversion Function Name if exist :)
+               let $conversionFunction := fqt:getValConversionFuncName($mdrResult)
                
                (: Get Source Coded Value that needs DTS Translation :)
                let $dtsSrcPropVal := $c/fq:parameters/fq:parameter[3]/text()
@@ -514,54 +512,67 @@ modify (
                  (: return insert node <parameter>{$dtsURL}</parameter> into $c/fq:parameters :)
                  (: return insert node <parameter>{$dtsResponse}</parameter> into $c/fq:parameters :)
 
-                 (: Loop through all the translated Values and create new <parameter> node for each one :)
-                 for $prop in $dtsResponse//property[name=$tgPropName]
-                   
-                   let $dtsVal := $prop/value/text()
-                   (: DEBUG
-                      return insert node <dtsVal>{$dtsVal}</dtsVal> into $c/fq:parameters
-                   :)
-                   
-                   (: Call Custom Function if Necessary :)
-                   return (: If there is a data conversion function from the MDR :)
-                   if ($conversionFunction) then
+                 (: Error Handling Here if NO Translated Results :)
+                 return 
+                 if ($dtsResponse//property[name=$tgPropName]) then
+
+                   (: Loop through all the translated Values and create new <parameter> node for each one :)
+                   for $prop in $dtsResponse//property[name=$tgPropName]
                      
-                     (: Get Function Handle :)
-                     let $funcHandle := fn:function-lookup(xs:QName($conversionFunction),$fqt:GLOBAL_ARITY)
-                     return 
-                       (: MUST Check Function Handle using fn:empty
-                          Otherwise there will be RunTime Error! :)
-                       if (fn:empty($funcHandle)) then (
-                         
-                         (: Error Handling :)
+                     let $dtsVal := $prop/value/text()
+                     (: DEBUG
+                        return insert node <dtsVal>{$dtsVal}</dtsVal> into $c/fq:parameters
+                     :)
+                     
+                     (: Call Custom Function if Necessary :)
+                     return (: If there is a data conversion function from the MDR :)
+                     if ($conversionFunction) then
+                       
+                       (: Get Function Handle :)
+                       let $funcHandle := fn:function-lookup(xs:QName($conversionFunction),$fqt:GLOBAL_ARITY)
+                       return 
+                         (: MUST Check Function Handle using fn:empty
+                            Otherwise there will be RunTime Error! :)
+                         if (fn:empty($funcHandle)) then (
+                           
+                           (: Error Handling :)
+  
+                           (: DEBUG 
+                              insert node <parameter>'No Dynamic Function Handle'</parameter>
+                                into $c/fq:parameters,
+  
+                              insert node <DEBUG_CRITERIA>{$c}</DEBUG_CRITERIA>
+                                into $c/fq:parameters
+                           :)
+                           
+                           (: Note The Update Pending List thinks that the parameter[2] 
+                                   from the original SIMPLE searchType criteria is still there.
+                                   So use the fq:parameter[2] node here! :)
+                           replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                              with $fqt:ERROR,
+                           
+                           insert node attribute sourceAttrText {$sourceAttrText}
+                             into $c/fq:parameters/fq:parameter[2]
+                         )  
+                         else
+                           (: Call Data Conversion Function :)
+                           let $convertedVal := $funcHandle($dtsVal)
+                           return (: Insert Converted Value :)
+                           insert node <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$convertedVal}</parameter>
+                             into $c/fq:parameters
+  
+                     else (: Insert Un-Converted, but DTS Translated Value :)
+                       insert node <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$dtsVal}</parameter> into $c/fq:parameters
+                 
+                 else (: Error Handling :) (
+                   replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
+                      with $fqt:ERROR
+                   ,
+                   insert node attribute sourceAttrText {$sourceAttrText}
+                     into $c/fq:parameters/fq:parameter[2]
+                 )
 
-                         (: DEBUG 
-                            insert node <parameter>'No Dynamic Function Handle'</parameter>
-                              into $c/fq:parameters,
-
-                            insert node <DEBUG_CRITERIA>{$c}</DEBUG_CRITERIA>
-                              into $c/fq:parameters
-                         :)
-                         
-                         (: Note The Update Pending List thinks that the parameter[2] 
-                                 from the original SIMPLE searchType criteria is still there.
-                                 So use the fq:parameter[2] node here! :)
-                         replace value of node $c/fq:parameters/fq:parameter[2]/@dtsFlag
-                            with $fqt:ERROR,
-                         
-                         insert node attribute sourceAttrText {$sourceAttrText}
-                           into $c/fq:parameters/fq:parameter[2]
-                       )  
-                       else
-                         (: Call Data Conversion Function :)
-                         let $convertedVal := $funcHandle($dtsVal)
-                         return (: Insert Converted Value :)
-                         insert node <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$convertedVal}</parameter>
-                           into $c/fq:parameters
-
-                   else (: Insert Un-Converted, but DTS Translated Value :)
-                     insert node <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$dtsVal}</parameter> into $c/fq:parameters
-
+                 
                )(: End Return :)
            
              )(: End If :)
@@ -1278,6 +1289,49 @@ modify (
              )
   
              , (: Process DTS Stuff :)
+
+             (: Determine if we need to Call DTS to Translate Coded Value :)
+             if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and fn:contains(value,$fqt:ONE_TO_MANY)]) then
+             
+               (: Get and Set the External (Target) Property Name :)
+               (: Only Added this for SIMPLE searchType for now :)
+               let $extPropName := fqt:getExtPropName($mdrResult)
+               let $tgPropName := 
+                 if ($extPropName) then $extPropName
+                 else $fqt:dtsTgPropName
+                 
+               (: Get Optional Data Value Conversion Function :)
+               let $valConversionFuncName := fqt:getValConversionFuncName($mdrResult)
+               
+               (: Get the Namespace Name :)
+               let $srcNamespaceName := further:getNamespaceName($srcNamespaceId)    
+                 
+               (: Get Data Type for Coded Value :)
+               let $dataType := 
+                 if ($mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]) then
+                   $mdrResult//entry[key=$fqt:ATTR_VALUE_TRANS_TO_DATA_TYPE]/value/text()
+                 else (: No DataType Conversion Needed, so use original Data Type :)
+                   (: We want the text value, not an XML Attribute here, 
+                      So we can use the fn:data or fn:string function here :)
+                   fn:data($c/fq:parameters/fq:parameter[last()]/@xsi:type)
+               
+               (: Loop to Transform Each Original <parameter> node :)  
+               for $parm in $c/fq:parameters/fq:parameter[position()>1 and @dtsFlag!=$fqt:ERROR]
+                 (: pwkm 20160818 
+                    We need to support one-to-many value translations.
+                    Each <parameter> may be replaced with many <parameter> nodes :)                   
+                 return replace node $parm
+                   with fqt:transParameter($srcNamespaceName, 
+                                           $tgPropName, 
+                                           $parm, 
+                                           $fqt:ONE_TO_MANY, 
+                                           $dataType,
+                                           $sourceAttrText,
+                                           $valConversionFuncName)
+               
+             else()
+             
+             ,
              (: Determine if we need to Call DTS to Translate Coded Value :)
              if ($mdrResult/properties/entry[key=$fqt:ATTR_VALUE_TRANS_FUNC and value=$fqt:translateCode]) then
 
@@ -1534,9 +1588,11 @@ modify (
 			  <key>{$key}</key>
 				<value>{$val}</value>
 			</alias>
-
-      (: pwkm 20160809 Reversed Bug Fix, It was NOT a Bug :)
-      into $p/ancestor::fq:query[1]//fq:aliases
+      (: pwkm 20160826
+         Find the Most Immediate (nearest) <query> from all ancestor nodes,
+         Then use the direct <aliases> node :)
+      into $p/ancestor::fq:query[1]/fq:aliases
+      (: into $p/ancestor::fq:query[1]//fq:aliases :)
       (: into $inputCopy2//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey] :)
       
   else()
@@ -1590,11 +1646,11 @@ modify (
         <key>{$key}</key>
 				<value>{$val}</value>
 			</alias>
-      (: Fixed Bug here, because what if we needed to add the extra <alias>
-         onto the Outter <query>?
-         Since we are looping through each <parameter> node, both Inner and Outer <query> nodes will be processed. :)
-      (: pwkm 20160809 Reversed Bug Fix, It was NOT a Bug :)
-      into $p/ancestor::fq:query[1]//fq:aliases
+      (: pwkm 20160826
+         Find the Most Immediate (nearest) <query> from all ancestor nodes,
+         Then use the direct <aliases> node :)
+      into $p/ancestor::fq:query[1]/fq:aliases
+      (: into $p/ancestor::fq:query[1]//fq:aliases :)
       (: into $inputCopy3//fq:aliases[fq:alias/@oldAliasKey=$oldAliasKey] :)
       
   else()
@@ -1739,7 +1795,7 @@ modify (
       insert node
         <error xmlns="http://further.utah.edu/core/ws">
           <code>MDR_QUERY_TRANSLATION_ERROR</code>
-          <message>MDR Association for [ {$fqt:FURTHeR}.{$attrName} ] May be Missing</message>
+          <message>MDR Association for [ {$fqt:FURTHeR}.{$attrName} ] May be Invalid</message>
         </error>
         into $inputCopy 
   )
@@ -1760,7 +1816,7 @@ modify (
       insert node
         <error xmlns="http://further.utah.edu/core/ws">
           <code>DTS_QUERY_TRANSLATION_ERROR</code>
-          <message>DTS Mapping for [ {$fqt:FURTHeR}.{$attrName}={$attrVal} ] May be Missing</message>
+          <message>DTS Mapping for [ {$fqt:FURTHeR}.{$attrName}={$attrVal} ] May be Invalid</message>
         </error>
         into $inputCopy
   )
@@ -2533,10 +2589,57 @@ declare function fqt:getExtPropName($result)
      Since there should ONLY be One :)
   (: for $entry in $result/properties/entry[key='EXTERNAL_PROPERTY_NAME'][1] :)
   (: This way is easier for Debugging :)
-  for $entry in $result//entry[key='EXTERNAL_PROPERTY_NAME'][1]
-  return $entry/value/text()
+  for $entry in $result//entry[key=$fqt:EXTERNAL_PROPERTY_NAME][1]
+
+  (: return $entry/value/text() :)
+  (: Return only the External Property Name, in case there's a data value conversion function.
+     externalPropertyName^valueConversionFunction in the MDR :)
+  return fn:tokenize($entry/value/text(),concat('\',$fqt:DELIMITER))[1]
+
 };
 
+
+(:==================================================================:)
+(: getValConversionFuncName =                                       :)
+(: Get Translated Value Conversion Function Name from MDR Result    :)
+(:==================================================================:)
+declare function fqt:getValConversionFuncName($result)
+{
+  (: Extract Out the FIRST External Property Name Value
+     Since there should ONLY be One :)
+  for $entry in $result//entry[key=$fqt:EXTERNAL_PROPERTY_NAME][1]
+
+  (: Return value conversion function name, if it exist.
+     externalPropertyName^valueConversionFunction in the MDR
+     The ^valueConversionFunction is Optional in the MDR.
+     Use Substring here, so it will return empty if delimiter does not exist
+     Do NOT use tokenize here, since tokenize will return the entire string
+     if the delimiter does not exist. :)
+  return fn:substring-after($entry/value/text(), $fqt:DELIMITER)
+
+};
+
+
+(:==================================================================:)
+(: getDtsFuncName =                                                 :)
+(: Get DTS Function Name from MDR Result                            :)
+(: Reserved for future use.                                         :)
+(:==================================================================:)
+declare function fqt:getDtsFuncName($result)
+{
+  (: Extract Out the FIRST External Property Name Value
+     Since there should ONLY be One :)
+  for $entry in $result//entry[key=$fqt:ATTR_VALUE_TRANS_FUNC][1]
+
+  (: Return value conversion function name, if it exist.
+     externalPropertyName^valueConversionFunction in the MDR
+     The ^valueConversionFunction is Optional in the MDR.
+     Use Substring here, so it will return empty if delimiter does not exist
+     Do NOT use tokenize here, since tokenize will return the entire string
+     if the delimiter does not exist. :)
+  return fn:substring-after($entry/value/text(), $fqt:DELIMITER)
+
+};
 
 (:==================================================================:)
 (: getSingleMdrResult = Get Single MDR Result from REST Output      :)
@@ -2590,6 +2693,71 @@ declare function fqt:getNdc($ndcFull)
 
   return $ndc
 };
+
+
+(:=========================================================================:)
+(: transParameter = translate a single <parameter> node                    :)
+(: A Single <parameter> node may be translated into many <parameter> nodes :)
+(:=========================================================================:)
+declare function fqt:transParameter($srcNamespaceName, 
+                                    $tgPropName,
+                                    $parm,
+                                    $transType,
+                                    $dataType,
+                                    $sourceAttrText,
+                                    $valConversionFuncName)
+{
+
+  (: Get Source Value to be Translated :)
+  let $dtsSrcPropVal := $parm/text()
+  (: DEBUG :)  
+  (: return <DEBUG>{$srcNamespaceName}^{$tgPropName}^{$parm}^{$transType}^{$dataType}^{$valConversionFuncName}^{$dtsSrcPropVal}</DEBUG> :)
+
+  return
+  switch ($transType)
+    case $fqt:ONE_TO_MANY
+      
+      return
+      (: Call DTS :)
+      let $dtsResponse := further:searchConcept($srcNamespaceName,
+                                                $fqt:dtsSrcPropNm,
+                                                $dtsSrcPropVal)
+
+      (: DEBUG DTS URL :)
+      (: let $dtsURL := further:getSearchRestUrl($srcNamespaceName,
+                                                 $fqt:dtsSrcPropNm,
+                                                 $dtsSrcPropVal) :)
+
+      (:  return <DEBUG>{$dtsURL}</DEBUG> :)
+
+      (: Loop through DTS Results and create new <parameter> node for each one :)
+      let $newParm := $fqt:EMPTY
+      for $prop in $dtsResponse//property[name=$tgPropName]
+
+        let $propVal := $prop/value/text()
+
+        (: Call Data Conversion Function if Needed :)
+        return 
+        if ($valConversionFuncName) then 
+          (: Get Dynamic Function Handle :)
+          let $valConversionFunc := fn:function-lookup(xs:QName($valConversionFuncName),$fqt:GLOBAL_ARITY)
+          (: MUST Check Function Handle using fn:empty
+             Otherwise there will be RunTime Error! :)
+          return 
+          if (fn:empty($valConversionFunc)) then
+            <parameter dtsFlag='{$fqt:ERROR}' sourceAttrText='{$sourceAttrText}' xsi:type='{$dataType}'>Invalid Function Handle in transParameter</parameter>
+          else
+            (: Call Dynamic Function to Process Translated Coded Value :)
+            let $processedVal := $valConversionFunc($propVal)
+            return <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$processedVal}</parameter>
+        else (: Return whatever was in DTS :)
+          <parameter dtsFlag='{$fqt:YES}' xsi:type='{$dataType}'>{$propVal}</parameter>
+        
+      (: End For Loop :)
+  
+    default return <ERROR>INVALID TRANSTYPE within transParameter Function</ERROR>
+
+}; (: END fqt:transParameter :)
 
 
 (: END OF MODULE :)
